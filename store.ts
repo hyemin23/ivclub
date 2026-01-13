@@ -29,6 +29,7 @@ export interface LogEntry {
 const getMsgId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 interface AppStore extends ProductState {
+  credits: number;
   setStep: (step: 1 | 2 | 3) => void;
   setAppView: (view: AppView) => void;
   setResolution: (res: Resolution) => void;
@@ -67,9 +68,12 @@ interface AppStore extends ProductState {
   logs: LogEntry[];
   addLog: (message: string, type?: LogEntry['type']) => void;
   clearLogs: () => void;
+  // Credit System
+  addCredits: (amount: number) => void;
 }
 
 const initialState: ProductState = {
+  credits: 0,
   brandName: 'NEW BRAND',
   name: '',
   analysis: null,
@@ -135,7 +139,8 @@ const initialState: ProductState = {
     totalTokens: 0,
     generatedImages: 0
   },
-  logs: []
+  logs: [],
+  credits: 0 // Default credits
 };
 
 
@@ -240,7 +245,7 @@ export const useStore = create<AppStore>()(
         brandAssets: state.brandAssets.map((a) => a.id === id ? { ...a, ...updates } : a)
       })),
       clearLookbook: () => set({ lookbookImages: [] }),
-      
+
       // Section Actions
       removeSection: (id) => set((state) => ({
         sections: state.sections.filter(s => s.id !== id)
@@ -250,26 +255,26 @@ export const useStore = create<AppStore>()(
         if (index === -1) return {};
         if (direction === 'up' && index === 0) return {};
         if (direction === 'down' && index === state.sections.length - 1) return {};
-        
+
         const newSections = [...state.sections];
         const swapIndex = direction === 'up' ? index - 1 : index + 1;
         [newSections[index], newSections[swapIndex]] = [newSections[swapIndex], newSections[index]];
         return { sections: newSections };
       }),
-      
+
       // Lookbook Image Actions (Move)
       moveLookbookImage: (id, direction) => set((state) => {
         const index = state.lookbookImages.findIndex(img => img.id === id);
         if (index === -1) return {};
         if (direction === 'up' && index === 0) return {};
         if (direction === 'down' && index === state.lookbookImages.length - 1) return {};
-        
+
         const newImages = [...state.lookbookImages];
         const swapIndex = direction === 'up' ? index - 1 : index + 1;
         [newImages[index], newImages[swapIndex]] = [newImages[swapIndex], newImages[index]];
         return { lookbookImages: newImages };
       }),
-      
+
       reorderLookbookImages: (fromIndex, toIndex) => set((state) => {
         const newImages = [...state.lookbookImages];
         const [movedItem] = newImages.splice(fromIndex, 1);
@@ -309,7 +314,7 @@ export const useStore = create<AppStore>()(
           generatedImages: state.usage.generatedImages + (isImage && success ? 1 : 0)
         }
       })),
-      
+
       // Log Actions
       logs: [],
       addLog: (message, type = 'info') => set((state) => ({
@@ -320,7 +325,10 @@ export const useStore = create<AppStore>()(
           type
         }, ...state.logs].slice(0, 50) // Keep last 50 logs
       })),
-      clearLogs: () => set({ logs: [] })
+      clearLogs: () => set({ logs: [] }),
+
+      // Credit System
+      addCredits: (amount) => set((state) => ({ credits: (state.credits || 0) + amount }))
     }),
     {
       name: 'nanobanana-storage', // unique name

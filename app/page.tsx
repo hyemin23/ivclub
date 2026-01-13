@@ -8,6 +8,7 @@ import { SidebarGroup } from '@/components/SidebarGroup';
 import FloatingLogViewer from '@/components/FloatingLogViewer';
 import { ApiKeySelector } from '@/components/ApiKeySelector';
 import { UsageMonitor } from '@/components/UsageMonitor';
+import { CreditShop } from '@/components/CreditShop';
 
 // Dynamic Imports with Loading States
 const AdminKeyManager = dynamic(() => import('@/components/AdminKeyManager').then(mod => mod.AdminKeyManager), { loading: () => <div className="p-12 text-center text-gray-500">Loading Admin...</div> });
@@ -182,6 +183,7 @@ const Page: React.FC = () => {
           {isSidebarOpen ? (
             <>
               <div className="mt-6 mb-8 animate-in fade-in duration-300">
+                <CreditShop />
                 <UsageMonitor />
               </div>
               <div className="p-4 bg-white/5 rounded-2xl space-y-3 animate-in fade-in duration-300">

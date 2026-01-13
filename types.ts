@@ -140,6 +140,7 @@ export interface UsageStats {
 }
 
 export interface ProductState {
+  credits: number;
   brandName: string;
   name: string;
   analysis: ProductAnalysis | null;
