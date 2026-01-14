@@ -1,18 +1,28 @@
 
 export type Resolution = '1K' | '2K' | '4K';
 export type Quality = '1K' | '2K' | '4K';
-export type AspectRatio = '1:1' | '9:16' | '4:3';
+export type AspectRatio = '1:1' | '9:16' | '4:3' | '3:4';
 export type ProductCategory = '상의' | '하의' | '아우터' | '셋업' | '잡화';
 export type MaterialType = '코튼' | '데님' | '나일론' | '울' | '니트' | '기모' | '린넨' | '혼방';
 export type ViewMode = 'full' | 'top' | 'bottom';
 export type PageLength = '5' | '7' | '9' | 'auto';
-export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin';
+export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor';
 export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change';
 
 export type FaceMode = 'ON' | 'OFF' | 'HEADLESS';
 export type Gender = 'Male' | 'Female' | 'UNSPECIFIED';
 export type Mode = 'Single' | 'Couple';
 export type CameraAngle = 'default' | 'front' | 'left-30' | 'left-40' | 'right-30' | 'right-40' | 'left-side' | 'right-side' | 'back';
+
+export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT';
+
+export interface PageBlock {
+  id: string;
+  type: BlockType;
+  dataId?: string; // Reference to store data item
+  content?: any; // For inline data (e.g. NoticeBlock image)
+  isVisible: boolean;
+}
 
 export type GeminiErrorType = 'safety' | 'quota' | 'auth' | 'invalid' | 'unknown';
 
@@ -76,8 +86,11 @@ export interface SizeRecord {
 export interface LookbookImage {
   id: string;
   url: string;
-  pose: string;
-  isGenerating: boolean;
+  pose?: string;
+  isGenerating?: boolean;
+  prompt?: string;
+  ratio?: string;
+  createdAt?: number;
 }
 
 export interface DetailSection {
@@ -139,11 +152,29 @@ export interface UsageStats {
   generatedImages: number;
 }
 
+
+export interface FabricInfo {
+  thickness: 'Thin' | 'Normal' | 'Thick';
+  sheer: 'None' | 'Low' | 'High';
+  stretch: 'None' | 'Low' | 'High';
+  lining: boolean;
+  season: string[];
+}
+
+export interface ProductSpecs {
+  colors: string[];
+  sizes: { [key: string]: string }; // e.g. "S": "95"
+  fabric: FabricInfo;
+  modelInfo?: string;
+}
+
 export interface ProductState {
   credits: number;
+  user: any | null; // Supabase User
   brandName: string;
   name: string;
   analysis: ProductAnalysis | null;
+  specs?: ProductSpecs; // New field for Standard Template
   sizeTable: SizeRecord[];
   sizeColumns: SizeColumn[];
   mainImageUrl: null | string;
@@ -151,7 +182,7 @@ export interface ProductState {
   lookbookImages: LookbookImage[];
   sections: DetailSection[];
   resolution: Resolution;
-  sizeCategory: SizeCategory; // New field
+  sizeCategory: SizeCategory;
   step: 1 | 2 | 3;
   appView: AppView;
   brandAssets: BrandAsset[];
@@ -159,5 +190,58 @@ export interface ProductState {
   apiKeys: { id: string; label: string; key: string }[];
   activeKeyId: string | null;
   autoFitting: AutoFittingState;
+  pageBlocks: PageBlock[];
 }
 
+// ============================================
+// Vision AI 기반 상세페이지 자동화 엔진 타입
+// ============================================
+
+/**
+ * Smart Pin - 이미지 내 포인트 핀 데이터
+ * Vision AI가 식별한 제품 특징의 좌표와 설명
+ */
+export interface SmartPin {
+  id: string;
+  location: {
+    x: number; // 이미지 내 X 좌표 (0-100%)
+    y: number; // 이미지 내 Y 좌표 (0-100%)
+  };
+  title: string;       // 핀 제목 (예: "프리미엄 스웨이드")
+  description: string; // 상세 설명 (예: "터치감이 부드럽고 고급스러운 무드")
+}
+
+/**
+ * VS 비교 항목 - 우리 제품 vs 경쟁사 비교
+ * Vision AI가 장점을 기반으로 역추론한 비교 데이터
+ */
+export interface VsComparisonItem {
+  category: string;    // 비교 카테고리 (예: "원단 퀄리티")
+  us_item: string;     // 우리 제품 장점 (예: "밀도 높은 고중량 원단 (O)")
+  others_item: string; // 경쟁사 단점 (예: "흐물거리고 얇은 저가 원단 (X)")
+}
+
+/**
+ * Vision AI 통합 분석 결과
+ * 단일 API 호출로 Smart Pin과 VS 비교표를 동시에 생성
+ */
+export interface VisionAnalysisResult {
+  status: 'success' | 'error';
+  data: {
+    smart_pins: SmartPin[];
+    comparison_table: VsComparisonItem[];
+  };
+  error?: string;
+}
+
+/**
+ * Vision 분석 상태 (Store용)
+ */
+export interface VisionAnalysisState {
+  isAnalyzing: boolean;
+  pins: SmartPin[];
+  comparisons: VsComparisonItem[];
+  sourceImageUrl: string | null;
+  error: string | null;
+  lastAnalyzedAt: number | null;
+}

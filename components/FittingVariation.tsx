@@ -46,7 +46,11 @@ const ZoomImage = ({ src, onClick, alt }: { src: string, onClick?: () => void, a
   );
 };
 
-const FittingVariation: React.FC = () => {
+interface FittingVariationProps {
+  onImageSelect?: (imageUrl: string) => void;
+}
+
+const FittingVariation: React.FC<FittingVariationProps> = ({ onImageSelect }) => {
   const [baseImage, setBaseImage] = useState<string | null>(null);
   const [refImage, setRefImage] = useState<string | null>(null);
   const [faceRefImage, setFaceRefImage] = useState<string | null>(null);
@@ -94,8 +98,8 @@ const FittingVariation: React.FC = () => {
   const handleImageUpload = (type: 'base' | 'ref' | 'face', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert("파일 용량이 너무 큽니다. 10MB 이하의 이미지를 사용해주세요.");
+      if (file.size > 20 * 1024 * 1024) {
+        alert("파일 용량이 너무 큽니다. 20MB 이하의 이미지를 사용해주세요.");
         return;
       }
       const reader = new FileReader();
@@ -345,7 +349,7 @@ const FittingVariation: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">비율</label>
                 <select value={aspectRatio} onChange={(e) => setAspectRatio(e.target.value as AspectRatio)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-3 text-[11px] focus:border-indigo-400 outline-none">
-                  <option value="1:1">1:1</option><option value="9:16">9:16</option><option value="4:3">4:3</option>
+                  <option value="1:1">1:1</option><option value="9:16">9:16</option><option value="4:3">4:3</option><option value="3:4">3:4</option>
                 </select>
               </div>
               <div className="space-y-2">
@@ -417,6 +421,17 @@ const FittingVariation: React.FC = () => {
                     <ZoomImage src={res.url} onClick={() => setSelectedImage(res.url)} />
                     <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                       <button onClick={() => setSelectedImage(res.url)} className="p-2 bg-indigo-600 rounded-lg text-white hover:scale-110 transition-transform"><Eye className="w-4 h-4" /></button>
+
+                      {onImageSelect && (
+                        <button
+                          onClick={() => onImageSelect(res.url)}
+                          className="p-2 bg-emerald-600 rounded-lg text-white hover:scale-110 transition-transform shadow-lg shadow-emerald-500/20"
+                          title="캔버스에 추가"
+                        >
+                          <Layers className="w-4 h-4" />
+                        </button>
+                      )}
+
                       <a href={res.url} download={`fitting_variation_${i}.png`} className="p-2 bg-slate-800 rounded-lg text-white hover:scale-110 transition-transform"><Download className="w-4 h-4" /></a>
                     </div>
                   </>

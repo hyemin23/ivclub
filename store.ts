@@ -3,7 +3,21 @@ import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { get, set, del } from 'idb-keyval';
 
-// Custom Storage Adapter for IndexedDB
+/**
+ * Custom Storage Adapter for IndexedDB
+ * 
+ * ⚠️ 중요: IndexedDB는 비동기 스토리지입니다.
+ * 
+ * 이 스토리지를 사용할 때 반드시 다음을 지켜야 합니다:
+ * 1. persist 옵션에 `skipHydration: true` 추가
+ * 2. StoreHydration 컴포넌트로 앱을 감싸기 (layout.tsx 참조)
+ * 3. 클라이언트 측에서 수동으로 rehydrate() 호출
+ * 
+ * 이를 지키지 않으면 SSR과 클라이언트 hydration 충돌로 인해
+ * 무한 로딩이 발생할 수 있습니다.
+ * 
+ * 해결 방법: /zustand-hydration-fix 워크플로우 참조
+ */
 const storage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
     return (await get(name)) || null;
@@ -15,7 +29,7 @@ const storage: StateStorage = {
     await del(name);
   },
 };
-import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult } from './types';
+import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult, PageBlock, BlockType } from './types';
 
 export interface LogEntry {
   id: string;
@@ -30,6 +44,7 @@ const getMsgId = () => Date.now().toString(36) + Math.random().toString(36).subs
 
 interface AppStore extends ProductState {
   credits: number;
+  user: any | null;
   setStep: (step: 1 | 2 | 3) => void;
   setAppView: (view: AppView) => void;
   setResolution: (res: Resolution) => void;
@@ -41,6 +56,7 @@ interface AppStore extends ProductState {
   addSizeRow: () => void;
   removeSizeRow: (id: string) => void;
   updateSizeRow: (id: string, name: string, data: Record<string, string>) => void;
+  setSizeTable: (table: SizeRecord[]) => void;
 
   addSizeColumn: () => void;
   removeSizeColumn: (id: string) => void;
@@ -61,6 +77,8 @@ interface AppStore extends ProductState {
   resetAll: () => void;
   apiKeys: { id: string; label: string; key: string }[];
   activeKeyId: string | null;
+  setApiKeys: (keys: { id: string; label: string; key: string }[]) => void;
+  setActiveKeyId: (id: string | null) => void;
   // AutoFitting Actions
   setAutoFittingState: (updates: Partial<AutoFittingState>) => void;
   updateAutoFittingResult: (id: string, updates: Partial<VariationResult>) => void;
@@ -70,10 +88,21 @@ interface AppStore extends ProductState {
   clearLogs: () => void;
   // Credit System
   addCredits: (amount: number) => void;
+  // User System
+  setUser: (user: any | null) => void;
+
+  // Block Editor Actions
+  pageBlocks: PageBlock[];
+  setPageBlocks: (blocks: PageBlock[]) => void;
+  addPageBlock: (block: PageBlock) => void;
+  removePageBlock: (id: string) => void; // Removes the block entry
+  updatePageBlock: (id: string, updates: Partial<PageBlock>) => void;
+  reorderPageBlocks: (fromIndex: number, toIndex: number) => void;
 }
 
-const initialState: ProductState = {
+const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks'> = {
   credits: 0,
+  user: null, // Supabase User
   brandName: 'NEW BRAND',
   name: '',
   analysis: null,
@@ -140,8 +169,9 @@ const initialState: ProductState = {
     generatedImages: 0
   },
   logs: [],
-  credits: 0 // Default credits
+  pageBlocks: [],
 };
+
 
 
 export const useStore = create<AppStore>()(
@@ -213,6 +243,7 @@ export const useStore = create<AppStore>()(
       updateSizeRow: (id, name, data) => set((state) => ({
         sizeTable: state.sizeTable.map(r => r.id === id ? { ...r, name, ...data } : r)
       })),
+      setSizeTable: (table) => set({ sizeTable: table }),
 
       // Column Actions Implementation
       addSizeColumn: () => set((state) => {
@@ -328,11 +359,31 @@ export const useStore = create<AppStore>()(
       clearLogs: () => set({ logs: [] }),
 
       // Credit System
-      addCredits: (amount) => set((state) => ({ credits: (state.credits || 0) + amount }))
+      addCredits: (amount) => set((state) => ({ credits: (state.credits || 0) + amount })),
+
+      // User System
+      setUser: (user) => set({ user }),
+
+      // Block Editor Actions Implementation
+      setPageBlocks: (blocks) => set({ pageBlocks: blocks }),
+      addPageBlock: (block) => set((state) => ({ pageBlocks: [...state.pageBlocks, block] })),
+      removePageBlock: (id) => set((state) => ({
+        pageBlocks: state.pageBlocks.filter((b) => b.id !== id)
+      })),
+      updatePageBlock: (id, updates) => set((state) => ({
+        pageBlocks: state.pageBlocks.map((b) => b.id === id ? { ...b, ...updates } : b)
+      })),
+      reorderPageBlocks: (fromIndex, toIndex) => set((state) => {
+        const newBlocks = [...state.pageBlocks];
+        const [movedItem] = newBlocks.splice(fromIndex, 1);
+        newBlocks.splice(toIndex, 0, movedItem);
+        return { pageBlocks: newBlocks };
+      }),
     }),
     {
       name: 'nanobanana-storage', // unique name
       storage: createJSONStorage(() => storage), // Use IndexedDB
+      skipHydration: true, // Skip automatic hydration to prevent SSR issues with async IndexedDB
       partialize: (state) => ({
         // IndexedDB handles large data well (hundreds of MBs), so we can persist everything
         brandName: state.brandName,
@@ -349,7 +400,8 @@ export const useStore = create<AppStore>()(
         sections: state.sections,
         mainImageUrl: state.mainImageUrl,
         techSketchUrl: state.techSketchUrl,
-        brandAssets: state.brandAssets
+        brandAssets: state.brandAssets,
+        pageBlocks: state.pageBlocks // Persist blocks
       }),
     }
   )
