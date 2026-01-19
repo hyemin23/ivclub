@@ -37,3 +37,19 @@ button {
 button:disabled {
   cursor: not-allowed;
 }
+
+/* Smart Block Editor Export Styles */
+.is-exporting input {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  color: #000;
+}
+
+.is-exporting input::placeholder {
+  color: transparent !important;
+}
+
+.is-exporting .hide-on-export {
+  display: none !important;
+}

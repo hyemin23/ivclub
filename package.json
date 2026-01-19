@@ -21,6 +21,7 @@
     "@tosspayments/payment-widget-sdk": "^0.12.1",
     "@types/file-saver": "^2.0.7",
     "clsx": "^2.1.1",
+    "fabric": "^7.1.0",
     "file-saver": "^2.0.5",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
@@ -38,8 +39,9 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@types/fabric": "^5.3.11",
     "@types/html2canvas": "^0.5.35",
-    "@types/node": "^20",
+    "@types/node": "^20.19.29",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@types/uuid": "^10.0.0",

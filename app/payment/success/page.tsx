@@ -1,18 +1,19 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useStore } from '@/store';
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { addCredits } = useStore(); // Hypothetical store action
     const [isProcessing, setIsProcessing] = useState(true);
 
-    const paymentKey = searchParams.get('paymentKey');
-    const orderId = searchParams.get('orderId');
-    const amount = searchParams.get('amount');
+    const paymentKey = searchParams?.get('paymentKey');
+    const orderId = searchParams?.get('orderId');
+    const amount = searchParams?.get('amount');
 
     useEffect(() => {
         if (!paymentKey || !orderId || !amount) {
@@ -69,5 +70,13 @@ export default function PaymentSuccessPage() {
                 </button>
             </div>
         </div>
+    );
+}
+
+export default function PaymentSuccessPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>}>
+            <PaymentSuccessContent />
+        </Suspense>
     );
 }

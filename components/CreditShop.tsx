@@ -3,15 +3,21 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { PaymentModal } from './PaymentModal';
+import { LoginModal } from './LoginModal';
 import { CreditCard, Package } from 'lucide-react';
 
 export const CreditShop: React.FC = () => {
-    const { credits } = useStore();
+    const { credits, user } = useStore();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
     const [selectedAmount, setSelectedAmount] = useState(0);
     const [orderName, setOrderName] = useState('');
 
     const openPayment = (amount: number, name: string) => {
+        if (!user) {
+            setIsLoginModalOpen(true);
+            return;
+        }
         setSelectedAmount(amount);
         setOrderName(name);
         setIsModalOpen(true);
@@ -24,9 +30,21 @@ export const CreditShop: React.FC = () => {
                     <CreditCard className="w-4 h-4" />
                     <span className="text-xs font-bold uppercase tracking-wider">Credits</span>
                 </div>
-                <div className="text-xl font-black text-green-400">
-                    {credits?.toLocaleString() || 0} P
-                </div>
+                {user ? (
+                    <div className="text-right">
+                        <div className="text-xl font-black text-green-400">
+                            {credits?.toLocaleString() || 0} P
+                        </div>
+                        <div className="text-[9px] text-gray-500 truncate max-w-[100px]">{user.email}</div>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setIsLoginModalOpen(true)}
+                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded transition-colors"
+                    >
+                        로그인 필요
+                    </button>
+                )}
             </div>
 
             <div className="space-y-2">
@@ -63,6 +81,11 @@ export const CreditShop: React.FC = () => {
                 onClose={() => setIsModalOpen(false)}
                 amount={selectedAmount}
                 orderName={orderName}
+            />
+
+            <LoginModal
+                isOpen={isLoginModalOpen}
+                onClose={() => setIsLoginModalOpen(false)}
             />
         </div>
     );

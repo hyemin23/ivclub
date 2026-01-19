@@ -2,21 +2,47 @@
 
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Factory, UserRoundPen, Zap, Settings, User, Rocket, Smartphone, Users, Menu, X, LayoutGrid, PanelLeftClose, PanelLeftOpen, Lock } from 'lucide-react';
+import { Factory, UserRoundPen, Zap, Settings, User, Rocket, Smartphone, Users, Menu, X, LayoutGrid, PanelLeftClose, PanelLeftOpen, Lock, Palette, Video } from 'lucide-react';
 import { useStore } from '@/store';
 import { SidebarGroup } from '@/components/SidebarGroup';
 import FloatingLogViewer from '@/components/FloatingLogViewer';
 import { ApiKeySelector } from '@/components/ApiKeySelector';
-import { UsageMonitor } from '@/components/UsageMonitor';
-import { CreditShop } from '@/components/CreditShop';
 
 // Dynamic Imports with Loading States
-const AdminKeyManager = dynamic(() => import('@/components/AdminKeyManager').then(mod => mod.AdminKeyManager), { loading: () => <div className="p-12 text-center text-gray-500">Loading Admin...</div> });
-const FitBuilder = dynamic(() => import('@/components/FitBuilder'), { loading: () => <div className="p-12 text-center text-gray-500">Loading Builder...</div> });
-const AutoFitting = dynamic(() => import('@/components/AutoFitting'), { loading: () => <div className="p-12 text-center text-gray-500">Loading Auto Fitting...</div> });
-const UGCMaster = dynamic(() => import('@/components/UGCMaster'), { loading: () => <div className="p-12 text-center text-gray-500">Loading UGC Master...</div> });
-const FactoryOnePage = dynamic(() => import('@/components/FactoryOnePage'), { loading: () => <div className="p-12 text-center text-gray-500">Loading Factory...</div> });
-const ThumbnailGenerator = dynamic(() => import('@/components/ThumbnailGenerator'), { loading: () => <div className="p-12 text-center text-gray-500">Loading Generator...</div> });
+const AdminKeyManager = dynamic(() => import('@/components/AdminKeyManager').then(mod => mod.AdminKeyManager), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Admin...</div>,
+  ssr: false
+});
+const FitBuilder = dynamic(() => import('@/components/FitBuilder'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Builder...</div>,
+  ssr: false
+});
+const AutoFitting = dynamic(() => import('@/components/AutoFitting'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Auto Fitting...</div>,
+  ssr: false
+});
+const UGCMaster = dynamic(() => import('@/components/UGCMaster'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading UGC Master...</div>,
+  ssr: false
+});
+const FactoryOnePage = dynamic(() => import('@/components/FactoryOnePage'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Factory...</div>,
+  ssr: false
+});
+const ThumbnailGenerator = dynamic(() => import('@/components/ThumbnailGenerator'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Generator...</div>,
+  ssr: false
+});
+const CreditShop = dynamic(() => import('@/components/CreditShop').then(mod => mod.CreditShop), { ssr: false });
+const UsageMonitor = dynamic(() => import('@/components/UsageMonitor').then(mod => mod.UsageMonitor), { ssr: false });
+const CanvasEditor = dynamic(() => import('@/components/CanvasEditor'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Canvas Editor...</div>,
+  ssr: false
+});
+const VideoStudio = dynamic(() => import('@/components/VideoStudio').then(mod => mod.VideoStudio), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Video Studio...</div>,
+  ssr: false
+});
 
 // const AutoFitting = () => <div className="p-10 border border-dashed border-gray-700 rounded-xl text-center text-gray-400">AutoFitting Disabled</div>;
 // const UGCMaster = () => <div className="p-10 border border-dashed border-gray-700 rounded-xl text-center text-gray-400">UGCMaster Disabled</div>;
@@ -67,6 +93,20 @@ const Page: React.FC = () => {
           icon: <Factory className="w-5 h-5" />,
           description: '대량 상페 자동 생성',
           view: 'factory' as const
+        },
+        {
+          id: 'canvas-editor',
+          name: '캔버스 에디터',
+          icon: <Palette className="w-5 h-5" />,
+          description: 'Vision AI 상세페이지',
+          view: 'canvas-editor' as const
+        },
+        {
+          id: 'video-studio',
+          name: 'AI Video Studio',
+          icon: <Video className="w-5 h-5" />, // Ensure Video icon is imported from lucide-react in line 5
+          description: '숏폼 영상 생성',
+          view: 'video-studio' as const
         },
       ]
     },
@@ -256,6 +296,8 @@ const Page: React.FC = () => {
             {appView === 'auto-fitting' && <AutoFitting />}
             {appView === 'thumbnail-generator' && <ThumbnailGenerator />}
             {appView === 'admin' && <AdminKeyManager />}
+            {appView === 'canvas-editor' && <CanvasEditor />}
+            {appView === 'video-studio' && <VideoStudio />}
             {appView === 'settings' && (
               <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-bottom-4">
 

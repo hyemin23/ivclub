@@ -15,11 +15,15 @@ import {
   Gender,
   CameraAngle,
   GenerationConfig,
-  SizeCategory,
   SizeRecord,
   ProductSpecs,
-  FabricInfo
+  DesignKeyword,
+  VsComparisonItem,
+  VisionAnalysisResult,
+  SmartPin,
+  SizeCategory
 } from "../types";
+import { ProductCopyAnalysis } from "../types"; // Import from types.ts
 import { TECHNICAL_INSTRUCTION } from "../constants/ugcPresets";
 import { useStore } from "../store";
 
@@ -145,12 +149,50 @@ export const FACTORY_POSES = [
   { id: 'folded_arms', name: '팔짱/신뢰감', prompt: 'folded arms pose, confident upper body fit focus' },
 ];
 
+/**
+ * Safely parse JSON from AI response, removing Markdown code blocks
+ */
+const safeJsonParse = <T>(text: string): T => {
+  try {
+    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    return JSON.parse(cleanText) as T;
+  } catch (e) {
+    console.error("JSON Parse Failed:", text);
+    throw new Error("AI 응답 형식이 올바르지 않습니다.");
+  }
+};
+
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = error => reject(error);
+  });
+};
+
+const imageUrlToBase64 = (url: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    if (url.startsWith('data:')) {
+      resolve(url);
+      return;
+    }
+
+    // Try XHR as it is often more robust against extension interference than fetch
+    const xhr = new XMLHttpRequest();
+    xhr.onload = function () {
+      const reader = new FileReader();
+      reader.onloadend = function () {
+        resolve(reader.result as string);
+      }
+      reader.readAsDataURL(xhr.response);
+    };
+    xhr.onerror = function () {
+      reject(new Error(`Failed to load image via XHR: ${xhr.statusText}`));
+    };
+    xhr.open('GET', url);
+    xhr.responseType = 'blob';
+    xhr.send();
   });
 };
 
@@ -533,7 +575,14 @@ Output:
   }, 5, 2000, "Pose Change Gen", signal);
 };
 
-export const generateDetailExtra = async (baseImage: string, refImage: string | null, prompt: string, resolution: Resolution, aspectRatio: AspectRatio): Promise<string> => {
+export const generateDetailExtra = async (
+  baseImage: string,
+  refImage: string | null,
+  prompt: string,
+  resolution: Resolution,
+  aspectRatio: AspectRatio,
+  options?: { imageStrength?: number }
+): Promise<string> => {
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const parts: any[] = [{ inlineData: { data: baseImage.split(',')[1], mimeType: 'image/png' } }];
@@ -542,10 +591,36 @@ export const generateDetailExtra = async (baseImage: string, refImage: string | 
     const finalPrompt = prompt || "Clean e-commerce detail cutout view, white background.";
     parts.push({ text: finalPrompt });
 
+    // Use imageStrength if provided, default to undefined (API default) or a standard value if needed.
+    // Note: 'imageStrength' parameter availability depends on the model and config structure.
+    // For 'gemini-3-pro-image-preview', standard image generation config usually includes prompt, negativePrompt, aspectRatio, etc.
+    // If we are doing image-to-image (which this seems to be, given 'baseImage'), 
+    // we might need to rely on prompt engineering if the API doesn't support explicit strength yet,
+    // OR if we are using a specific endpoint. 
+    // Assuming 'imageConfig' allows extra parameters or we are using a specific way to control adherence.
+    // If the SDK/Model allows 'imageStrength' (0.0 to 1.0) for Image-to-Image text guided generation:
+    const generationConfig: any = {
+      aspectRatio,
+      imageSize: resolution
+    };
+
+    // Attempting to pass guidelines via config if supported, otherwise it falls back to prompt.
+    // However, verify if 'imageStrength' is a valid top-level config or part of imageConfig.
+    // For now, we'll keep it simple: strict prompt + visual input.
+    // If the user specifically asked for 'strength', we often need to check if we are using an endpoint that supports it.
+    // Since we are using 'gemini-3-pro-image-preview', let's try to pass it in `imageConfig` or check docs.
+    // *If* the user provided a specific API pattern for strength, we should follow it.
+    // The user said: "image_strength (or prompt_strength) ... 0.25 ~ 0.3".
+
+    if (options?.imageStrength !== undefined) {
+      // @ts-ignore - tentative support
+      generationConfig.imageStrength = options.imageStrength;
+    }
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
       contents: { parts },
-      config: { imageConfig: { aspectRatio, imageSize: resolution } }
+      config: { imageConfig: generationConfig }
     });
     trackUsage(response);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -556,10 +631,29 @@ export const generateDetailExtra = async (baseImage: string, refImage: string | 
 export const generateBackgroundChange = async (baseImage: string, bgRefImage: string | null, userPrompt: string, resolution: Resolution, aspectRatio: AspectRatio, faceOptions?: any, signal?: AbortSignal): Promise<string> => {
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    const parts: any[] = [{ inlineData: { data: baseImage.split(',')[1] || baseImage, mimeType: 'image/png' } }];
-    if (bgRefImage) parts.push({ inlineData: { data: bgRefImage.split(',')[1] || bgRefImage, mimeType: 'image/png' } });
+    // 1. Initialize parts with system prompt (or placeholder) and base image
+    const parts: any[] = [];
+
+    // We will push the prompt text later after constructing it, or we can structure strictly as User requested.
+    // User requested: [ { text }, { baseImage }, { refImage? } ]
+    // But currently `finalPrompt` depends on logic. 
+    // Let's build the array DYNAMICALLY.
+
+    // Always include Base Image
+    const baseImagePart = { inlineData: { data: baseImage.split(',')[1] || baseImage, mimeType: 'image/png' } };
+
+    parts.push(baseImagePart);
+
+    // Conditionally Add Reference Image
+    if (bgRefImage && bgRefImage.length > 100) { // Simple check to ensure it's a valid image string
+      parts.push({ inlineData: { data: bgRefImage.split(',')[1] || bgRefImage, mimeType: 'image/png' } });
+    } else {
+      console.log('Skipping Reference Image (Not provided or Preset used)');
+    }
 
     let finalPrompt = userPrompt;
+
+    const preset = faceOptions?.preset;
 
     if (bgRefImage) {
       finalPrompt = `
@@ -580,7 +674,8 @@ Do NOT transfer any people, objects, text, or logos from the reference image—u
 Blending & realism:
 - Match perspective, scale, and horizon
 - Match light direction, brightness, and color temperature
-- Add natural ground contact and soft shadows
+- Match the shadow direction with the sunlight. Create a hard, directional cast shadow extending from the feet on the ground.
+- Apply shallow depth of field. Slightly blur the background pavement behind the model to create depth.
 - Seamless composite with no cutout artifacts
 
 Restrictions:
@@ -591,18 +686,69 @@ Restrictions:
 Output:
 - High-resolution, realistic fashion image
         `;
+    } else if (preset === 'MZ_CAFE') {
+      // MZ Hotspot Preset
+      finalPrompt = `
+[NanoBanana PRO MODE: K-REALISM STREET SNAP]
+
+**TASK:** Composite the subject into a photorealistic, authentic Korean street background.
+
+**SCENE COMPOSITION (CRITICAL REALISM):**
+1.  **LOCATION:** A realistic, bustling street in Seoul (e.g., Apgujeong backstreet, Yeonnam-dong alley). NOT a fantasy or studio set.
+2.  **TIME & LIGHTING:** Bright, natural **DAYLIGHT** (afternoon sun). The lighting on the subject and shadows must perfectly match the sunny day street environment.
+3.  **GROUND (K-TEXTURE):** Must be authentic Korean pavement. Use a mix of **cracked asphalt** and standard **Korean interlocking sidewalk blocks (보도블록)**. Add realistic grit, pebbles, and wear.
+4.  **BACKGROUND ELEMENTS (THE "REAL" DETAILS):**
+    * **Mandatory K-Elements:** Overhead **power lines (전선)** and **utility poles (전봇대)**.
+    * **Buildings:** Realistic 2-4 story Korean commercial buildings (brick, concrete). Add small, realistic Korean business signs (한글 간판 - blurred).
+    * **Objects:** Maybe a parked Korean car (e.g., Kia Ray, Hyundai Avante - blurred) or a delivery motorbike in the distance.
+
+**FEEL:** Candid, unposed street fashion photography. Raw, authentic, high-resolution.
+
+**NEGATIVE PROMPT (금지어):**
+studio floor, clean minimalist background, fantasy neon, perfect pavement, Western architecture, no power lines, blurry texture, oversaturated colors, fake light.
+      `;
     } else {
       // Standard Text-to-Background Mode
       finalPrompt = `
-[NanoBanana PRO MODE - BACKGROUND CHANGE]
+    [NanoBanana PRO MODE - BACKGROUND CHANGE]
 Change the background of the image based on the following description:
-"${userPrompt || 'Clean, professional studio background'}"
+  "${userPrompt || 'Clean, professional studio background'}"
 
-Instructions:
-- Keep the main subject exactly as is.
+  Instructions:
+  - Keep the main subject exactly as is.
 - Replace the background completely.
 - Ensure realistic lighting integration.
         `;
+    }
+
+    // [SMART FRAMING LOGIC]
+    const category = faceOptions?.category;
+    if (category) {
+      let framingPrompt = '';
+      if (category === 'TOP') {
+        framingPrompt = `
+    ** CAMERA FRAMING:** Medium Close - up / Torso Shot.
+** CROP GUIDE:**
+    1. ** HEADLESS:** Crop the image just below the nose or at the chin line.Do NOT show the full face.
+2. ** RANGE:** Frame from the chin down to the hips.
+3. ** FOCUS:** Focus sharply on the chest, shoulders, and sleeve details.`;
+      } else if (category === 'BOTTOM') {
+        framingPrompt = `
+    ** CAMERA FRAMING:** Waist - Down Shot / Legs Shot.
+** CROP GUIDE:**
+    1. ** NO UPPER BODY:** Crop out the head and chest.Start the frame from the waist / belt line.
+2. ** SHOES MANDATORY:** You MUST include the full shoes and the ground they are standing on. ** DO NOT CROP THE FEET.**
+    3. ** FOCUS:** Focus on the fit of the pants, the drape over the shoes, and the texture.`;
+      } else if (category === 'SET') {
+        framingPrompt = `
+      ** CAMERA FRAMING:** Headless Full Body Shot.
+** CROP GUIDE:**
+    1. ** HEADLESS:** Crop the image at the nose or chin level.
+2. ** FULL OUTFIT:** Show the entire outfit from the neck down to the shoes.
+3. ** SHOES INCLUDED:** Feet must be fully visible and grounded.`;
+      }
+
+      finalPrompt += `\n\n${framingPrompt} \n\n[COMMON NEGATIVE PROMPT]\nface, eyes, full head, cropped shoes, cut off feet, missing shoes, selfie angle.`;
     }
 
     parts.push({ text: finalPrompt });
@@ -613,7 +759,7 @@ Instructions:
     });
     trackUsage(response);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
   }, 5, 2000, "Background Change", signal);
 };
 
@@ -627,7 +773,7 @@ export const generateTechSketch = async (category: string, name: string): Promis
     });
     trackUsage(response);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
   });
 };
 
@@ -639,14 +785,14 @@ export const generateFactoryPose = async (baseImage: string, pose: any, analysis
       contents: {
         parts: [
           { inlineData: { data: baseImage.split(',')[1], mimeType: 'image/png' } },
-          { text: `Model wearing the product. Pose: ${pose.prompt}. Target: ${analysis.category}. Model Gender: ${analysis.gender || 'Female'}` }
+          { text: `Model wearing the product.Pose: ${pose.prompt}.Target: ${analysis.category}. Model Gender: ${analysis.gender || 'Female'} ` }
         ]
       },
       config: { imageConfig: { aspectRatio: "9:16", imageSize: resolution } }
     });
     trackUsage(response, true);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
   });
 };
 
@@ -655,7 +801,7 @@ export const planDetailSections = async (analysis: any, name: string): Promise<a
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Create a plan for a fashion detail page for ${name} (${analysis.category}). Return 5 sections as JSON items: title, logicalSection, keyMessage, visualPrompt.`,
+      contents: `Create a plan for a fashion detail page for ${name}(${analysis.category}).Return 5 sections as JSON items: title, logicalSection, keyMessage, visualPrompt.`,
       config: { responseMimeType: "application/json" }
     });
     trackUsage(response);
@@ -668,7 +814,7 @@ export const planDetailPage = async (product: ProductInfo, length: PageLength): 
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Create a product detail page plan for ${product.name}. Length: ${length}. Return as JSON array: title, logicalSection, keyMessage, visualPrompt.`,
+      contents: `Create a product detail page plan for ${product.name}.Length: ${length}.Return as JSON array: title, logicalSection, keyMessage, visualPrompt.`,
       config: { responseMimeType: "application/json" }
     });
     trackUsage(response);
@@ -695,7 +841,7 @@ export const generateSectionImage = async (segment: DetailImageSegment, baseImag
     });
     trackUsage(response, true);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
   });
 };
 
@@ -714,7 +860,7 @@ export const generateLookbookImage = async (base64: string, description: string,
     });
     trackUsage(response, true);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
   });
 };
 
@@ -725,6 +871,7 @@ export const generateAutoFitting = async (
   targetAngle: CameraAngle,
   aspectRatio: AspectRatio,
   resolution: Resolution,
+  isSideProfile: boolean = false, // Added Flag
   signal?: AbortSignal
 ): Promise<string> => {
   return retryOperation(async () => {
@@ -742,79 +889,95 @@ export const generateAutoFitting = async (
     const angleNegative = typeof anglePromptData === 'string' ? '' : anglePromptData.negative;
     let masterPrompt = '';
 
+    const sideProfilePrompt = isSideProfile ? `
+  [NanoBanana PRO MODE: SIDE PROFILE FIX]
+
+** POSE OVERRIDE:** 90 - degree Side Profile / Lateral View.
+** INSTRUCTION:**
+    Render the pants from a COMPLETE SIDE VIEW.
+1. ** NO FRONT DETAILS:** Do NOT show the zipper fly, front button, or crotch seam.
+2. ** SIDE DETAILS:** Focus on the "Side Seam"(sewing line) of the pants running down the leg.
+3. ** SHAPE:** The width of the pants should reflect the side profile(thinner waist, wider leg if baggy).
+4. ** ORIENTATION:** The feet and hips must face the EXACT same direction as the model's head (Left/Right).
+
+    ** NEGATIVE PROMPT(SIDE PROFILE MANDATORY):**
+      front view, symmetrical pockets, zipper fly showing, navel, pelvic bone, twisted torso, forward facing legs.
+` : '';
+
     if (bgImage) {
       // CASE 1: Background Replacement + Angle Consistency (Original Logic)
       masterPrompt = `[NanoBanana PRO MODE]
 
-Use the first uploaded image as the MAIN IMAGE (person source).
+Use the first uploaded image as the MAIN IMAGE(person source).
 Use the second uploaded image as the BACKGROUND REFERENCE.
 
 Separate the person from the background in the main image with clean, accurate edges.
 Preserve the person EXACTLY as is:
-- Do not change pose, body proportions, face, hair, or expression
-- Do not change clothing, fabric, color, fit, or accessories
-- Keep the original camera angle and framing
+  - Do not change pose, body proportions, face, hair, or expression
+    - Do not change clothing, fabric, color, fit, or accessories
+      - Keep the original camera angle and framing
 
 Replace ONLY the background of the main image with the background from the reference image.
 Do NOT transfer any people, objects, text, or logos from the reference image—use background environment only.
 
 User Instruction: "${userPrompt || 'Seamless photorealistic integration'}"
 
-Blending & realism:
-- Match perspective, scale, and horizon
-- Match light direction, brightness, and color temperature
-- Add natural ground contact and soft shadows
-- Seamless composite with no cutout artifacts
+  Blending & realism:
+  - Match perspective, scale, and horizon
+    - Match light direction, brightness, and color temperature
+      - Add natural ground contact and soft shadows
+        - Seamless composite with no cutout artifacts
 
-Restrictions:
-- Background change only
-- No stylization, no cinematic filters
-- No text, logos, or graphic elements
+  Restrictions:
+  - Background change only
+    - No stylization, no cinematic filters
+      - No text, logos, or graphic elements
 
-Output:
-- High-resolution, realistic fashion image
-- Correct camera angle if requested
+  Output:
+  - High - resolution, realistic fashion image
+    - Correct camera angle if requested
 
-[CAMERA ANGLE INSTRUCTION]
+    [CAMERA ANGLE INSTRUCTION]
 Target Angle: ${anglePositive}
 IF the requested angle is DIFFERENT from the original:
-- ROTATE the subject to match the angle on the new background.
+  - ROTATE the subject to match the angle on the new background.
 - Adjust the perspective to match the background.
 
-[NEGATIVE PROMPT]
+    ${sideProfilePrompt}
+
+  [NEGATIVE PROMPT]
 ${angleNegative}
-`;
+  `;
     } else {
       const currentHeadlessPrompt = anglePrompts[targetAngle]?.positive || 'Original Angle';
 
       masterPrompt = `[NanoBanana PRO MODE - ANGLE VIEW]
     
     Use the first uploaded image as the MAIN IMAGE.
-    
-    Framing & crop (IMPORTANT):
-    - **HEADLESS CROP**: Reframe to a neck-down composition.
+
+    Framing & crop(IMPORTANT):
+    - ** HEADLESS CROP **: Reframe to a neck - down composition.
     - Crop the image at the neck so NO part of the face remains visible.
     - Remove all empty space above the neck.
-    - Rebuild the frame so the body (neck to feet) fills the canvas naturally, cutting off the head.
+    - Rebuild the frame so the body(neck to feet) fills the canvas naturally, cutting off the head.
     
     Camera Angle & Pose:
-    - Target Angle: ${currentHeadlessPrompt}
-    - ROTATE the subject to match the Target Angle.
+  - Target Angle: ${currentHeadlessPrompt}
+  - ROTATE the subject to match the Target Angle.
     - The subject must be visually balanced within the frame.
     
     Preserve the subject:
-    - Keep the entire body from neck to feet visible.
+  - Keep the entire body from neck to feet visible.
     - Adjust pose naturally for rotation, but keep body proportions.
     - Do not change clothing, fabric, color, or fit.
     - Do not add or remove accessories.
-    
+
     Background & lighting:
-    - Keep the original background and lighting unchanged.
-    - Maintain natural shadows and ground contact.
-    
-    Output:
-    - Correctly framed (Headless), commercial e-commerce quality.
-    `;
+  - Generate a clean, neutral professional studio background(white or light grey).
+    - Add soft, natural studio lighting.
+
+    ${sideProfilePrompt}
+  `;
     }
 
     parts.push({ text: masterPrompt });
@@ -827,7 +990,7 @@ ${angleNegative}
     trackUsage(response, true);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
 
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
 
   }, 5, 2000, "Auto Fitting", signal);
 };
@@ -846,25 +1009,25 @@ export const generateVirtualTryOn = async (
     ];
 
     const prompt = `
-    [VIRTUAL TRY-ON MODE]
+  [VIRTUAL TRY - ON MODE]
     
-    Image 1: Model (Target Person)
-    Image 2: Garment (Reference Product)
-    Category: ${category.toUpperCase()}
+    Image 1: Model(Target Person)
+    Image 2: Garment(Reference Product)
+  Category: ${category.toUpperCase()}
 
-    TASK:
-    - Replace the ${category} on the Model (Image 1) with the Garment from Image 2.
+  TASK:
+  - Replace the ${category} on the Model(Image 1) with the Garment from Image 2.
     - Keep the Model's face, hair, pose, skin tone, and background EXACTLY the same.
-    - Keep other clothing items unchanged (e.g. if category is 'top', keep pants/shoes).
-    
-    EXECUTION:
-    1. Identify the ${category} area on the Model.
-    2. Warp and fit the Garment (Image 2) onto that area.
+      - Keep other clothing items unchanged(e.g.if category is 'top', keep pants / shoes).
+
+        EXECUTION:
+  1. Identify the ${category} area on the Model.
+    2. Warp and fit the Garment(Image 2) onto that area.
     3. Match lighting, shadows, and fabric folds to the Model's original pose.
-    4. Ensure the boundary between skin and new garment is seamless.
+  4. Ensure the boundary between skin and new garment is seamless.
 
     OUTPUT:
-    - Photorealistic result.
+  - Photorealistic result.
     - High fidelity to the Garment's texture and pattern.
     `;
 
@@ -885,7 +1048,7 @@ export const generateVirtualTryOn = async (
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
     if (!part?.inlineData) throw new Error("Try-On generation failed");
 
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
   }, 3, 2000, "Virtual Try-On", signal);
 };
 export const generateMagicEraser = async (
@@ -903,10 +1066,10 @@ export const generateMagicEraser = async (
 
     const prompt = `[MAGIC ERASER MODE]
   Image 1: Original Source Image
-  Image 2: Mask Image (Red stroke indicates area to remove)
-  
-  TASK: Remove the object/text/element covered by the Red/Masked area in Image 1.
-  - Inpaint the removed area naturally using the surrounding background texture and pattern.
+  Image 2: Mask Image(Red stroke indicates area to remove)
+
+  TASK: Remove the object / text / element covered by the Red / Masked area in Image 1.
+    - Inpaint the removed area naturally using the surrounding background texture and pattern.
   - Do NOT modify any other part of the image.
   - The output should look like the original image but without the masked element.
   - High quality, seamless blending.
@@ -929,7 +1092,7 @@ export const generateMagicEraser = async (
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
     if (!part?.inlineData) throw new Error("Magic Eraser generation failed");
 
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+    return `data: image / png; base64, ${part?.inlineData?.data} `;
   });
 };
 
@@ -943,48 +1106,48 @@ export const extractSizeTableFromImage = async (imageFile: File): Promise<{ cate
         text: `
         This image is a size chart for a fashion product.
         Analyze the text and structure to determine the category and extract size data.
-        
-        Step 1: Determine Category
-        - "pants", "slacks", "jeans", "skirt" -> "pants" or "skirt" (Use "pants" for generic bottoms like slacks/jeans)
-        - "t-shirt", "shirt", "blouse", "jacket", "coat" -> "short_sleeve" or "long_sleeve" (Use "short_sleeve" for tees, "long_sleeve" for others)
+
+    Step 1: Determine Category
+      - "pants", "slacks", "jeans", "skirt" -> "pants" or "skirt"(Use "pants" for generic bottoms like slacks / jeans)
+  - "t-shirt", "shirt", "blouse", "jacket", "coat" -> "short_sleeve" or "long_sleeve"(Use "short_sleeve" for tees, "long_sleeve" for others)
         
         Step 2: Map Terms to Keys based on Category
-        
-        [Common]
-        - "총장", "기장", "총길이", "Length" -> "length"
-        
-        [If Category is Top (short_sleeve/long_sleeve)]
-        - "어깨", "어깨너비", "Shoulder" -> "shoulder"
-        - "가슴", "가슴단면", "Chest", "Bust" -> "chest"
-        - "소매", "소매길이", "팔길이", "Sleeve" -> "sleeve"
-        
-        [If Category is Bottom (pants/skirt)]
-        - "허리", "허리단면", "Waist" -> "waist"
-        - "허벅지", "허벅지단면", "Thigh" -> "thigh"
-        - "밑위", "Rise" -> "rise"
-        - "밑단", "밑단단면", "Hem" -> "hem"
-        - "엉덩이", "힙", "Hip" -> "hip"
+
+  [Common]
+    - "총장", "기장", "총길이", "Length" -> "length"
+
+    [If Category is Top(short_sleeve / long_sleeve)]
+  - "어깨", "어깨너비", "Shoulder" -> "shoulder"
+    - "가슴", "가슴단면", "Chest", "Bust" -> "chest"
+    - "소매", "소매길이", "팔길이", "Sleeve" -> "sleeve"
+
+    [If Category is Bottom(pants / skirt)]
+  - "허리", "허리단면", "Waist" -> "waist"
+    - "허벅지", "허벅지단면", "Thigh" -> "thigh"
+    - "밑위", "Rise" -> "rise"
+    - "밑단", "밑단단면", "Hem" -> "hem"
+    - "엉덩이", "힙", "Hip" -> "hip"
         
         Step 3: Extract Data
-        - "name" key: Size name (S, M, L, Free, 28, 30 etc)
-        - Values: Numbers only (remove 'cm'). If range (e.g., 28~30), use average.
+    - "name" key: Size name(S, M, L, Free, 28, 30 etc)
+      - Values: Numbers only(remove 'cm').If range(e.g., 28~30), use average.
         - If a column is missing in the image, do not invent it.
         
         Return JSON structure:
-        {
-          "category": "pants", // one of: "short_sleeve", "long_sleeve", "pants", "skirt"
-          "sizes": [
-            { "id": "gen_id_1", "name": "S", "length": "104", "waist": "32", ... },
-            ...
+  {
+    "category": "pants", // one of: "short_sleeve", "long_sleeve", "pants", "skirt"
+      "sizes": [
+        { "id": "gen_id_1", "name": "S", "length": "104", "waist": "32", ... },
+        ...
           ]
-        }
-        IMPORTANT: Add unique random string to "id" field.
+  }
+  IMPORTANT: Add unique random string to "id" field.
         `
       }
     ];
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: { parts },
       config: {
         responseMimeType: "application/json"
@@ -1023,29 +1186,65 @@ export const generateMarketingCopy = async (productName: string, features: strin
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
     const prompt = `
-    You are a professional 10-year fashion editor.
-    Transform the follow raw product information into high-converting marketing copy.
+    You are a professional 10 - year fashion editor.
+    Transform the follow raw product information into high - converting marketing copy.
 
     Product Name: ${productName}
     Raw Features:
     ${features.map(f => `- ${f}`).join('\n')}
 
     Return JSON format:
-    {
-      "mainCopy": { "headline": "Strong, catchy 1-line hook", "subhead": "Supporting benefit 1-line" },
-      "featureCopy": [
-        { "title": "Feature 1 Keyword", "description": "1 sentence explanation" },
-        { "title": "Feature 2 Keyword", "description": "1 sentence explanation" }
-      ],
+  {
+    "mainCopy": { "headline": "Strong, catchy 1-line hook", "subhead": "Supporting benefit 1-line" },
+    "featureCopy": [
+      { "title": "Feature 1 Keyword", "description": "1 sentence explanation" },
+      { "title": "Feature 2 Keyword", "description": "1 sentence explanation" }
+    ],
       "tpoCopy": { "situation": "Office/Date/Vacation etc", "caption": "Emotional suggestion for when to wear" },
-      "moodKeywords": ["Dynamic", "Minimal", "Cozy", "Luxury"] (Select 1-2 best moods)
-    }
-    `;
+    "moodKeywords": ["Dynamic", "Minimal", "Cozy", "Luxury"](Select 1 - 2 best moods)
+  }
+  `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp', // Fast model preferred
+      model: 'gemini-3-flash-preview', // Fast model preferred
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            mainCopy: {
+              type: Type.OBJECT,
+              properties: {
+                headline: { type: Type.STRING },
+                subhead: { type: Type.STRING }
+              },
+              required: ['headline', 'subhead']
+            },
+            featureCopy: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING }
+                },
+                required: ['title', 'description']
+              }
+            },
+            tpoCopy: {
+              type: Type.OBJECT,
+              properties: {
+                situation: { type: Type.STRING },
+                caption: { type: Type.STRING }
+              },
+              required: ['situation', 'caption']
+            },
+            moodKeywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ['mainCopy', 'featureCopy', 'tpoCopy', 'moodKeywords']
+        }
+      }
     });
 
     trackUsage(response);
@@ -1061,15 +1260,15 @@ export const analyzeImageMood = async (file: File): Promise<{ mood: string, tags
 
     const prompt = `
     Analyze this fashion image.
-    1. Determine the Mood: "Dynamic" (energetic/movement), "Minimal" (clean/simple), "Romantic" (soft/emotional), "Urban" (street/cool).
-    2. Extract 3-4 visual tags (e.g., #studio, #outdoors, #close-up).
+    1. Determine the Mood: "Dynamic"(energetic / movement), "Minimal"(clean / simple), "Romantic"(soft / emotional), "Urban"(street / cool).
+    2. Extract 3 - 4 visual tags(e.g., #studio, #outdoors, #close - up).
     3. Extract 1 dominant color hex code from the background or atmosphere.
 
     Return JSON: { "mood": string, "tags": string[], "colorHex": string }
-    `;
+  `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
           { inlineData: { data, mimeType: file.type } },
@@ -1088,30 +1287,41 @@ export const extractProductSpecs = async (description: string): Promise<ProductS
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: `Analyze the following fashion product description and extract structured specifications.
       
       Input Description:
-      \${description}
+\${ description }
 
       Return JSON with:
-      - colors: Array of color names mentioned (e.g. ["Blue", "Black"])
-      - sizes: Object where key is size name (S, M, L) and value is short notes (e.g. "95", "Standard Fit")
+- colors: Array of color names mentioned(e.g. ["Blue", "Black"])
+  - colors: Array of color names mentioned(e.g. ["Blue", "Black"])
+    - sizes: Array of objects with "name"(S, M, L) and "notes"(e.g. "95", "Standard Fit")
       - fabric: Object with:
-        - thickness: 'Thin' | 'Normal' | 'Thick'
+      - thickness: 'Thin' | 'Normal' | 'Thick'
         - sheer: 'None' | 'Low' | 'High'
-        - stretch: 'None' | 'Low' | 'High'
-        - lining: boolean (true/false)
-        - season: Array of seasons (Spring, Summer, Autumn, Winter)
+          - stretch: 'None' | 'Low' | 'High'
+            - lining: boolean(true / false)
+              - season: Array of seasons(Spring, Summer, Autumn, Winter)
       
-      If information is missing, infer reasonable defaults based on context or set to "Normal"/"None".`,
+      If information is missing, infer reasonable defaults based on context or set to "Normal" / "None".`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             colors: { type: Type.ARRAY, items: { type: Type.STRING } },
-            sizes: { type: Type.OBJECT, additionalProperties: { type: Type.STRING } },
+            sizes: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  notes: { type: Type.STRING }
+                },
+                required: ['name', 'notes']
+              }
+            },
             fabric: {
               type: Type.OBJECT,
               properties: {
@@ -1138,126 +1348,106 @@ export const extractProductSpecs = async (description: string): Promise<ProductS
 // Smart Pin + Dynamic VS 통합 분석
 // ============================================
 
-import { SmartPin, VsComparisonItem, VisionAnalysisResult } from '../types';
+
 
 /**
- * Vision AI 통합 분석 함수
- * 단일 API 호출로 Smart Pin과 VS 비교표를 동시에 생성
+ * Vision AI 통합 분석 함수 (V2: Fabric.js Design Overlay)
+ * 단일 API 호출로 디자인 키워드와 VS 비교표를 동시에 생성
  * 
  * @param imageBase64 - 분석할 이미지 (Base64)
+ * @param productName - 사용자 입력 상품명 (필수 Context)
  * @param productDescription - 추가 상품 설명 (선택)
- * @returns VisionAnalysisResult - 핀 데이터와 비교표 데이터
+ * @returns VisionAnalysisResult - 디자인 키워드와 비교표 데이터
  */
+
+const urlToBase64 = async (url: string): Promise<string> => {
+  if (url.startsWith('data:')) {
+    return url.split(',')[1];
+  }
+  // If it's a remote URL (Supabase, etc)
+  if (url.startsWith('http')) {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+        resolve(base64data.split(',')[1]);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+  // Assume it's already base64 string
+  return url;
+};
+
 export const analyzeProductVision = async (
-  imageBase64: string,
+  imageInput: string,
+  productName: string,
   productDescription?: string
 ): Promise<VisionAnalysisResult> => {
   // @ts-ignore
-  useStore.getState().addLog('Vision AI 통합 분석 시작 (Smart Pin + VS)', 'info');
+  useStore.getState().addLog('Vision AI V2 분석 시작 (Design Overlay)', 'info');
 
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
-    const systemPrompt = `
-[ROLE]
-너는 이커머스 매출을 극대화하는 전문 MD이자 비주얼 디렉터야.
+    if (imageInput.startsWith('blob:')) {
+      throw new Error("Blob URL detected. Please ensure image is uploaded to Storage or converted to Base64.");
+    }
 
-[TASK]
-업로드된 상품 이미지를 시각적으로 분석해서 두 가지 작업을 동시에 수행해:
+    const base64Data = await urlToBase64(imageInput);
 
-1. **Pin Pointing (Smart Pin 생성)**:
-   - 소비자가 매력을 느낄만한 포인트(소재, 핏, 디테일) 2~4곳을 찾아
-   - 각 포인트의 이미지 상 대략적 좌표(x, y %)와 함께
-   - 매력적인 짧은 제목(title)과 설명(description)을 작성해
-   - 좌표는 이미지 좌상단 (0,0) ~ 우하단 (100,100) 기준
+    const prompt = `
+      You are a professional fashion art director and merchandising expert.
+      Analyze this fashion product image and provide detailed visual analysis for a high - end e - commerce detail page.
+      
+      Product Name: ${productName}
+Description: ${productDescription || 'N/A'}
 
-2. **Comparison Strategy (VS 비교표 생성)**:
-   - 위에서 찾은 장점을 바탕으로
-   - 일반적인 저가형 경쟁사 제품이 가질법한 치명적인 단점을 역추론해
-   - [카테고리 - 우리 장점(us_item) - 경쟁사 단점(others_item)] 형태로 2~4개 구성
-   - 우리 장점에는 "(O)", 경쟁사 단점에는 "(X)" 표시 포함
-
-[ADDITIONAL CONTEXT]
-${productDescription || '(추가 설명 없음)'}
-
-[CONSTRAINTS]
-- 좌표는 반드시 0~100 사이의 정수(%)로 반환
-- 핀 ID는 "pin_1", "pin_2" 형식으로
-- 실제 이미지에서 보이는 특징만 분석 (추측 최소화)
-- 비교표에서 우리 제품은 이미지 근거, 경쟁사는 합리적 추론
-- 반드시 지정된 JSON 포맷으로만 응답할 것
-`;
+[REQUIREMENTS]
+1. Identify 3 - 4 "Smart Pins": Key visual highlights(stitching, texture, buttons, fit).Provide exact coordinates.
+      2. Qualitative Comparison Table: 2 - 3 categories comparing this "Premium" product vs "Others".
+      
+      [OUTPUT FORMAT]
+      Strictly JSON:
+{
+  "smart_pins": [
+    { "id": "pin_1", "location": { "x": number, "y": number }, "title": "Feature Title", "description": "Short explanation" }
+  ],
+    "comparison_table": [
+      { "category": "Category", "us_item": "Our feature", "others_item": "Others' drawback" }
+    ]
+}
+x, y are percentages(0 - 100) of the image dimensions.
+    `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
-          { inlineData: { data: imageBase64.split(',')[1] || imageBase64, mimeType: 'image/png' } },
-          { text: systemPrompt }
+          { inlineData: { data: base64Data.split(',')[1] || base64Data, mimeType: "image/jpeg" } },
+          { text: prompt }
         ]
       },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            status: { type: Type.STRING, enum: ['success', 'error'] },
-            data: {
-              type: Type.OBJECT,
-              properties: {
-                smart_pins: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      location: {
-                        type: Type.OBJECT,
-                        properties: {
-                          x: { type: Type.NUMBER },
-                          y: { type: Type.NUMBER }
-                        },
-                        required: ['x', 'y']
-                      },
-                      title: { type: Type.STRING },
-                      description: { type: Type.STRING }
-                    },
-                    required: ['id', 'location', 'title', 'description']
-                  }
-                },
-                comparison_table: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      category: { type: Type.STRING },
-                      us_item: { type: Type.STRING },
-                      others_item: { type: Type.STRING }
-                    },
-                    required: ['category', 'us_item', 'others_item']
-                  }
-                }
-              },
-              required: ['smart_pins', 'comparison_table']
-            }
-          },
-          required: ['status', 'data']
-        }
-      }
+      config: { responseMimeType: "application/json" }
     });
 
-    trackUsage(response);
-    const result = JSON.parse(response.text || '{}') as VisionAnalysisResult;
+    const text = response.text || '';
 
-    // 성공 로깅
-    const pinCount = result?.data?.smart_pins?.length || 0;
-    const vsCount = result?.data?.comparison_table?.length || 0;
-    // @ts-ignore
-    useStore.getState().addLog(`Vision 분석 완료: ${pinCount}개 핀, ${vsCount}개 비교 항목`, 'success');
-
-    return result;
-
-  }, 3, 2000, "Vision AI Analysis");
+    try {
+      const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(jsonStr);
+      return {
+        status: 'success',
+        data: parsed
+      };
+    } catch (e: any) {
+      console.error("Parse Error", e);
+      throw new Error("AI 응답을 분석하는 중 오류가 발생했습니다.");
+    }
+  }, 3, 5000, "Vision Analysis");
 };
 
 /**
@@ -1295,4 +1485,328 @@ export const getDefaultVisionAnalysis = (): VisionAnalysisResult => {
       ]
     }
   };
+};
+
+// ============================================
+// AI Copywriting Engine
+// ============================================
+
+// ============================================
+// AI USP Generator (Feature Blocks)
+// ============================================
+
+export interface USPBlock {
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+export const generateProductUSPs = async (
+  userInput: string,
+  base64Image?: string
+): Promise<USPBlock[]> => {
+  // @ts-ignore
+  useStore.getState().addLog('AI USP 분석 시작 (Feature Blocks)', 'info');
+
+  return retryOperation(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+
+    // If user input is empty, using image analysis is better, but here we prioritize user input if exists
+    // If both empty, we might need a fallback or rely on image context if passed.
+    // The prompt handles "based on user's keywords (or image context)"
+
+    const imagePart = base64Image ? { inlineData: { data: base64Image.split(',')[1] || base64Image, mimeType: 'image/jpeg' } } : null;
+
+    const parts: any[] = [];
+    if (imagePart) parts.push(imagePart);
+
+    const systemPrompt = `
+    You are a Korean fashion merchandising expert. 
+    Based on the users keywords (or image context if keywords are empty), generate 4 key selling points (USPs).
+    
+    [USER INPUT]
+    "${userInput || 'Analyze the image and find 4 key selling points'}"
+    
+    [OUTPUT FORMAT]
+    Strictly JSON Array of objects. No markdown.
+    [
+      { "icon": "feather", "title": "신축성", "desc": "편안한 사방 스판" },
+      ...
+    ]
+
+    [CRITICAL REQUIREMENTS]
+    1. Language: ONLY Korean (한국어).
+    2. Style: Concise, noun-ending (짧고 간결한 명사형 종결).
+    3. Length: Description MUST be under 15 characters (설명은 15자 이내).
+    
+    [ICON MAPPING]
+    Use only these Lucide icon names: 
+    feather, shield-check, wind, maximize, check-circle, sun, droplet, star, heart, zap, camera, smartphone, watch, layers, layout, box, tag, shopping-bag, truck, credit-card
+    (Select the most appropriate one)
+    `;
+
+    parts.push({ text: systemPrompt });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: { parts }
+    });
+
+    const text = response.text || '';
+
+    try {
+      const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const data = JSON.parse(jsonStr);
+      // @ts-ignore
+      useStore.getState().addLog('AI USP 분석 완료', 'success');
+      return data as USPBlock[];
+    } catch (e) {
+      console.error("USP Parse Error", e);
+      throw new Error("USP 데이터 분석 실패");
+    }
+  }, 3, 3000, "USP Generation");
+};
+
+
+export const analyzeProductCopy = async (
+  imageInput: string,
+  userInput: string
+): Promise<ProductCopyAnalysis> => {
+  // @ts-ignore
+  useStore.getState().addLog('AI Copywriting 분석 시작', 'info');
+
+  return retryOperation(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+
+    if (imageInput.startsWith('blob:')) {
+      throw new Error('Blob URL detected. Please ensure image is uploaded to Storage or converted to Base64.');
+    }
+
+    const base64Data = await urlToBase64(imageInput);
+
+    const systemPrompt = `
+[ROLE]
+당신은 2030 남성 의류 브랜드 'Asterisk'의 전문 카피라이터이자 패션 MD입니다.
+사용자가 업로드한 의류 이미지를 시각적으로 분석하고, 사용자의 입력 정보를 결합하여 매력적인 상세페이지 문구를 작성하세요.
+
+1. ** 톤앤매너:** 과장되지 않고 담백하며, 시네마틱하고 모던한 어조. (이모지 남발 금지)
+2. ** 타겟:** 트렌드에 민감하지만 기본을 중시하는 20~30대 남성.
+3. ** 분석 포인트:**
+  - 핏(Fit): 오버핏, 레귤러, 머슬핏 등
+    - 소재(Material): 질감, 계절감, 두께
+      - 디테일(Detail): 단추, 카라, 마감 등
+        - TPO(Occasion): 데이트, 출근, 여행 등
+
+        [USER INPUT]
+"${userInput}"
+
+[OUTPUT FORMAT]
+반드시 JSON 형식으로 출력하세요.
+{
+  "product_analysis": {
+    "detected_color": ["Color1", "Color2"],
+      "fabric_guess": "Fabric Name",
+        "style_keywords": ["Keyword1", "Keyword2"]
+  },
+  "copy_options": [
+    {
+      "type": "Emotional",
+      "title": "감성적인 메인 헤드라인",
+      "description": "감성적인 서브 텍스트"
+    },
+    {
+      "type": "Functional",
+      "title": "기능 강조 헤드라인",
+      "description": "기능 강조 설명"
+    },
+    {
+      "type": "Trend",
+      "title": "트렌드 강조 헤드라인",
+      "description": "스타일링 제안 설명"
+    }
+  ]
+}
+`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          { inlineData: { data: base64Data.split(',')[1] || base64Data, mimeType: 'image/png' } },
+          { text: systemPrompt }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            product_analysis: {
+              type: Type.OBJECT,
+              properties: {
+                detected_color: { type: Type.ARRAY, items: { type: Type.STRING } },
+                fabric_guess: { type: Type.STRING },
+                style_keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+              },
+              required: ['detected_color', 'fabric_guess', 'style_keywords']
+            },
+            copy_options: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  type: { type: Type.STRING, enum: ['Emotional', 'Functional', 'Trend'] },
+                  title: { type: Type.STRING },
+                  description: { type: Type.STRING }
+                },
+                required: ['type', 'title', 'description']
+              }
+            }
+          },
+          required: ['product_analysis', 'copy_options']
+        }
+      }
+    });
+
+    try {
+      trackUsage(response);
+      const result = safeJsonParse<ProductCopyAnalysis>(response.text || '{}');
+
+      // @ts-ignore
+      useStore.getState().addLog('AI Copywriting 분석 완료', 'success');
+      return result;
+    } catch (e: any) {
+      // @ts-ignore
+      useStore.getState().addLog(`분석 결과 파싱 실패: ${e?.message} `, 'error');
+      throw e;
+    }
+
+  }, 3, 3000, "Copywriting Analysis");
+};
+
+/**
+ * Generate Outfit Swap using Inpainting & Reference Logic
+ */
+import { addVerticalPadding, cropVerticalPadding } from '@/utils/imagePadding';
+
+// ... (existing code, keeping generateOutfitSwap signature)
+
+export const generateOutfitSwap = async (
+  baseImage: string,
+  refImage: string,
+  maskImage: string,
+  ratio: string = '1:1',
+  quality: string = 'STANDARD'
+): Promise<string> => {
+  const geminiKey = getApiKey();
+  if (!geminiKey) throw new Error("API Key not found");
+
+  const genAI = new GoogleGenAI({ apiKey: geminiKey });
+
+  // 1. Base Dimensions (Standard)
+  let baseWidth = 1024;
+  let baseHeight = 1024;
+
+  switch (ratio) {
+    case '1:1': baseWidth = 1024; baseHeight = 1024; break;
+    case '3:4': baseWidth = 768; baseHeight = 1024; break;
+    case '9:16': baseWidth = 720; baseHeight = 1280; break;
+    case '4:3': baseWidth = 1024; baseHeight = 768; break;
+    case '16:9': baseWidth = 1280; baseHeight = 720; break;
+    default: baseWidth = 1024; baseHeight = 1024;
+  }
+
+  // 2. High Quality Upscaling (x1.5)
+  if (quality === 'HIGH') {
+    baseWidth = Math.floor(baseWidth * 1.5);
+    baseHeight = Math.floor(baseHeight * 1.5);
+  }
+
+  const targetResolution = `${baseWidth}x${baseHeight}`;
+  console.log(`[Gemini] Resolution Config: Ratio=${ratio}, Quality=${quality} -> ${targetResolution}`);
+
+  const prompt = `[NanoBanana PRO MODE: PHOTOREALISTIC INTEGRATION]
+**TASK:** Replace the pants texture while PRESERVING original lighting.
+**INSTRUCTION:**
+1.  **TEXTURE SWAP:** Replace the material inside the mask with the [Reference Image]'s fabric.
+2.  **LIGHTING MATCH (CRITICAL):**
+    * Analyze the direction of sunlight and ambient light in the [Base Image].
+    * Apply the EXACT same shadow intensity and highlight fall-off to the new pants.
+    * The new pants must cast shadows on the ground exactly where the original pants did.
+3.  **COLOR GRADING:** Adjust the color temperature of the new pants to match the [Base Image]'s environment (e.g., if the scene is warm sunset, the pants should have a warm tint).
+4.  **BLEND MODE:** Treat the new texture as if applied with "Multiply" mode over the original shadows.
+
+**NEGATIVE PROMPT:**
+floating texture, flat lighting, sticker effect, unnatural brightness, glowing edges, mismatched shadows, cartoonish.`;
+
+  try {
+    const base64Base = await imageUrlToBase64(baseImage);
+    const mimeTypeBase = base64Base.match(/data:([^;]+);/)?.[1] || "image/png";
+
+    const base64Ref = await imageUrlToBase64(refImage);
+    const mimeTypeRef = base64Ref.match(/data:([^;]+);/)?.[1] || "image/png";
+
+    const base64Mask = await imageUrlToBase64(maskImage); // New Mask
+    const mimeTypeMask = base64Mask.match(/data:([^;]+);/)?.[1] || "image/png";
+
+    // Using @google/genai SDK pattern (genAI.models.generateContent)
+    // Switches to Gemini 3 Pro Image Preview for "Pro Mode" Magic Paint.
+    const response = await retryOperation(() => genAI.models.generateContent({
+      model: "gemini-3-pro-image-preview",
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            { inlineData: { mimeType: mimeTypeBase, data: base64Base.split(',')[1] } }, // 1. Base
+            { inlineData: { mimeType: mimeTypeRef, data: base64Ref.split(',')[1] } },   // 2. Ref
+            { inlineData: { mimeType: mimeTypeMask, data: base64Mask.split(',')[1] } }   // 3. Mask
+          ]
+        }
+      ],
+      config: {
+        responseModalities: ['IMAGE', 'TEXT'], // Explicitly request Image and Text
+        // @ts-ignore
+        imageConfig: { imageSize: targetResolution }, // Dynamic resolution mapped from ratio
+        // User snippet used '1K'. I'll interpret '1K' might be '1024x1024' or literal '1K'. 
+        // Docs usually say '1024x1024'. I'll stick to '1024x1024' for safety, or try '1K' if strict user request.
+        // User said: "imageSize: '1K'". I will use '1K' and cast as any if needed.
+        temperature: 0.4,
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+        ] as any
+      }
+    }));
+
+    trackUsage(response, true);
+
+    console.log("Gemini Outfit Swap Response:", JSON.stringify(response, null, 2)); // DEBUG LOG
+
+    // Check for Candidate finishReason
+    if (response.candidates && response.candidates[0]) {
+      console.log("Candidate Finish Reason:", response.candidates[0].finishReason);
+      console.log("Safety Ratings:", JSON.stringify(response.candidates[0].safetyRatings, null, 2));
+    }
+
+    // Handle image response
+    if (response.candidates && response.candidates[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData && part.inlineData.data) {
+          const rawResultBase64 = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+          return rawResultBase64; // Direct return, no cropping
+        }
+      }
+    }
+
+    // Likely refusal or empty response
+    console.error("Gemini Response Missing Image Data:", JSON.stringify(response, null, 2));
+    throw new Error("이미지 생성에 실패했습니다. (AI가 요청을 처리하지 못했습니다. 인물이나 의상이 잘 보이는지 확인해주세요.)");
+
+  } catch (error) {
+    console.error("Outfit Swap Error:", error);
+    throw error;
+  }
 };

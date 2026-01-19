@@ -16,6 +16,7 @@ interface CustomSelectProps {
   icon?: React.ReactNode;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 const CustomSelect: React.FC<CustomSelectProps> = ({
@@ -25,7 +26,8 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   label,
   icon,
   placeholder = "Select...",
-  className = ""
+  className = "",
+  disabled = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -49,19 +51,24 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      {label && <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-2 block">{label}</label>}
+      {label && <label className={`text-[10px] font-black uppercase tracking-widest ml-1 mb-2 block ${disabled ? 'text-gray-700' : 'text-gray-500'}`}>{label}</label>}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full bg-black border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between text-xs font-bold transition-all hover:border-white/30 text-white ${isOpen ? 'border-white/50 ring-1 ring-white/20' : ''}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`w-full bg-black border rounded-xl px-4 py-3 flex items-center justify-between text-xs font-bold transition-all 
+          ${disabled
+            ? 'border-white/5 text-gray-700 cursor-not-allowed bg-white/5'
+            : `border-white/10 hover:border-white/30 text-white ${isOpen ? 'border-white/50 ring-1 ring-white/20' : ''}`
+          }`}
         type="button"
       >
         <div className="flex items-center gap-2">
-          {icon && <span className="text-gray-400">{icon}</span>}
-          <span className={selectedOption ? 'text-white' : 'text-gray-500'}>
+          {icon && <span className={disabled ? 'text-gray-700' : 'text-gray-400'}>{icon}</span>}
+          <span className={selectedOption ? (disabled ? 'text-gray-600' : 'text-white') : 'text-gray-500'}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${disabled ? 'text-gray-800' : 'text-gray-400'}`} />
       </button>
 
       {isOpen && (

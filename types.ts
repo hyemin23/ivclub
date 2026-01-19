@@ -6,15 +6,15 @@ export type ProductCategory = '상의' | '하의' | '아우터' | '셋업' | '�
 export type MaterialType = '코튼' | '데님' | '나일론' | '울' | '니트' | '기모' | '린넨' | '혼방';
 export type ViewMode = 'full' | 'top' | 'bottom';
 export type PageLength = '5' | '7' | '9' | 'auto';
-export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor';
-export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change';
+export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio';
+export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change' | 'outfit-swap';
 
 export type FaceMode = 'ON' | 'OFF' | 'HEADLESS';
 export type Gender = 'Male' | 'Female' | 'UNSPECIFIED';
 export type Mode = 'Single' | 'Couple';
 export type CameraAngle = 'default' | 'front' | 'left-30' | 'left-40' | 'right-30' | 'right-40' | 'left-side' | 'right-side' | 'back';
 
-export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT';
+export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT' | 'DESIGN' | 'TYPOGRAPHY';
 
 export interface PageBlock {
   id: string;
@@ -81,6 +81,14 @@ export interface SizeRecord {
   id: string;
   name: string; // "S", "M", "L", "FREE"
   [key: string]: string; // Dynamic dimensions
+}
+
+export interface DesignKeyword {
+  keyword: string;
+  style: 'badge' | 'simple_text' | 'speech_bubble' | 'arrow_text';
+  // Position hints (optional, 0-1 scale)
+  x?: number;
+  y?: number;
 }
 
 export interface LookbookImage {
@@ -163,7 +171,7 @@ export interface FabricInfo {
 
 export interface ProductSpecs {
   colors: string[];
-  sizes: { [key: string]: string }; // e.g. "S": "95"
+  sizes: { name: string; notes: string }[]; // Changed to array for better schema compliance
   fabric: FabricInfo;
   modelInfo?: string;
 }
@@ -194,26 +202,18 @@ export interface ProductState {
 }
 
 // ============================================
-// Vision AI 기반 상세페이지 자동화 엔진 타입
+// Vision AI 기반 상세페이지 자동화 엔진 타입 (V2: Fabric.js Design Overlay)
 // ============================================
 
 /**
- * Smart Pin - 이미지 내 포인트 핀 데이터
- * Vision AI가 식별한 제품 특징의 좌표와 설명
+ * Design Keyword - 이미지 위에 배치할 디자인 요소
+ * Vision AI가 식별한 제품 특징 키워드와 스타일 제안
  */
-export interface SmartPin {
-  id: string;
-  location: {
-    x: number; // 이미지 내 X 좌표 (0-100%)
-    y: number; // 이미지 내 Y 좌표 (0-100%)
-  };
-  title: string;       // 핀 제목 (예: "프리미엄 스웨이드")
-  description: string; // 상세 설명 (예: "터치감이 부드럽고 고급스러운 무드")
-}
+// DesignKeyword is already defined above
 
 /**
  * VS 비교 항목 - 우리 제품 vs 경쟁사 비교
- * Vision AI가 장점을 기반으로 역추론한 비교 데이터
+ * Vision AI가 장점을 기반으로 역추론한 비교 데이터 (Legacy Support or Keep)
  */
 export interface VsComparisonItem {
   category: string;    // 비교 카테고리 (예: "원단 퀄리티")
@@ -222,14 +222,26 @@ export interface VsComparisonItem {
 }
 
 /**
- * Vision AI 통합 분석 결과
- * 단일 API 호출로 Smart Pin과 VS 비교표를 동시에 생성
+ * Vision AI 통합 분석 결과 (V2)
+ */
+
+export interface SmartPin {
+  id: string;
+  location: { x: number; y: number };
+  title: string;
+  description: string;
+}
+
+/**
+ * Vision AI 통합 분석 결과 (V2)
  */
 export interface VisionAnalysisResult {
   status: 'success' | 'error';
   data: {
     smart_pins: SmartPin[];
-    comparison_table: VsComparisonItem[];
+    design_keywords?: DesignKeyword[];
+    comparison_table?: VsComparisonItem[];
+    auto_typography?: AutoTypographyResult;
   };
   error?: string;
 }
@@ -239,9 +251,51 @@ export interface VisionAnalysisResult {
  */
 export interface VisionAnalysisState {
   isAnalyzing: boolean;
-  pins: SmartPin[];
+  keywords: DesignKeyword[];
   comparisons: VsComparisonItem[];
   sourceImageUrl: string | null;
   error: string | null;
   lastAnalyzedAt: number | null;
+}
+
+// ============================================
+// AI Copywriting Types
+// ============================================
+
+export interface CopyOption {
+  type: 'Emotional' | 'Functional' | 'Trend';
+  title: string;
+  description: string;
+}
+
+export interface ProductCopyAnalysis {
+  product_analysis: {
+    detected_color: string[];
+    fabric_guess: string;
+    style_keywords: string[];
+  };
+  copy_options: CopyOption[];
+}
+
+// ============================================
+// AI Auto-Typography Types
+// ============================================
+
+export interface AutoTypographyResult {
+  intro_copy: {
+    english: string;
+    korean: string;
+  };
+  feature_point: {
+    highlight_word: string;
+    full_sentence: string;
+  };
+  visual_tag: string;
+}
+
+export interface DesignKeyword {
+  keyword: string;
+  style: 'badge' | 'simple_text' | 'speech_bubble' | 'arrow_text';
+  x?: number;
+  y?: number;
 }

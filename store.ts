@@ -29,7 +29,8 @@ const storage: StateStorage = {
     await del(name);
   },
 };
-import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult, PageBlock, BlockType } from './types';
+import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult, PageBlock, BlockType, DesignKeyword, VsComparisonItem, ProductCopyAnalysis } from './types';
+import { VideoGenerationLog, VideoStatus } from './types/video';
 
 export interface LogEntry {
   id: string;
@@ -98,6 +99,35 @@ interface AppStore extends ProductState {
   removePageBlock: (id: string) => void; // Removes the block entry
   updatePageBlock: (id: string, updates: Partial<PageBlock>) => void;
   reorderPageBlocks: (fromIndex: number, toIndex: number) => void;
+
+  // Editor Selection State
+  selectedBlockId: string | null;
+  activeTab: 'blocks' | 'edit';
+  setSelectedBlockId: (id: string | null) => void;
+  setActiveTab: (tab: 'blocks' | 'edit') => void;
+
+  // Vision AI Data
+  designKeywords: DesignKeyword[];
+  comparisons: VsComparisonItem[];
+  uploadedImages: string[];
+  productNameInput: string;
+
+  setDesignKeywords: (keywords: DesignKeyword[]) => void;
+  setComparisons: (items: VsComparisonItem[]) => void;
+  setUploadedImages: (images: string[]) => void;
+  setProductNameInput: (name: string) => void;
+  setMainImageUrl: (url: string | null) => void;
+
+  // AI Copywriting
+  copyAnalysis: ProductCopyAnalysis | null;
+  setCopyAnalysis: (analysis: ProductCopyAnalysis | null) => void;
+
+  // AI Video Generation (Veo)
+  videoLogs: VideoGenerationLog[];
+  activeVideoLogId: string | null;
+  addVideoLog: (log: VideoGenerationLog) => void;
+  updateVideoLog: (id: string, updates: Partial<VideoGenerationLog>) => void;
+  setActiveVideoLogId: (id: string | null) => void;
 }
 
 const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks'> = {
@@ -170,6 +200,16 @@ const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 
   },
   logs: [],
   pageBlocks: [],
+  selectedBlockId: null,
+  activeTab: 'blocks',
+  designKeywords: [],
+  comparisons: [],
+  uploadedImages: [],
+  productNameInput: '',
+  // mainImageUrl is null
+  copyAnalysis: null,
+  videoLogs: [],
+  activeVideoLogId: null
 };
 
 
@@ -378,7 +418,27 @@ export const useStore = create<AppStore>()(
         const [movedItem] = newBlocks.splice(fromIndex, 1);
         newBlocks.splice(toIndex, 0, movedItem);
         return { pageBlocks: newBlocks };
+        return { pageBlocks: newBlocks };
       }),
+
+      setSelectedBlockId: (id) => set({ selectedBlockId: id }),
+      setActiveTab: (tab) => set({ activeTab: tab }),
+
+      setDesignKeywords: (keywords) => set({ designKeywords: keywords }),
+      setComparisons: (items) => set({ comparisons: items }),
+      setUploadedImages: (images) => set({ uploadedImages: images }),
+      setProductNameInput: (name) => set({ productNameInput: name }),
+      setMainImageUrl: (url) => set({ mainImageUrl: url }),
+
+      // Copywriting
+      setCopyAnalysis: (analysis) => set({ copyAnalysis: analysis }),
+
+      // Video Generation
+      addVideoLog: (log) => set((state) => ({ videoLogs: [log, ...state.videoLogs] })),
+      updateVideoLog: (id, updates) => set((state) => ({
+        videoLogs: state.videoLogs.map(log => log.id === id ? { ...log, ...updates } : log)
+      })),
+      setActiveVideoLogId: (id) => set({ activeVideoLogId: id })
     }),
     {
       name: 'nanobanana-storage', // unique name
