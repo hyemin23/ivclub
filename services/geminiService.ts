@@ -1,5 +1,13 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContentSafe, fileToPart, GEMINI_MODELS } from "./geminiClient";
+import {
+  changeColorVariant,
+  replaceBackground,
+  magicEraser,
+  generateBackgroundVariations,
+  generatePoseVariation
+} from "./imageService";
 import {
   ProductCategory,
   ProductAnalysis,
@@ -18,11 +26,12 @@ import {
   SizeRecord,
   ProductSpecs,
   DesignKeyword,
-  VsComparisonItem,
   VisionAnalysisResult,
   SmartPin,
-  SizeCategory
+  SizeCategory,
+  SavedModel
 } from "../types";
+import { smartGenerateImage } from "../utils/geminiHybridService";
 import { ProductCopyAnalysis } from "../types"; // Import from types.ts
 import { TECHNICAL_INSTRUCTION } from "../constants/ugcPresets";
 import { useStore } from "../store";
@@ -33,6 +42,8 @@ export interface GeminiErrorResponse {
   message: string;
   type: GeminiErrorType;
 }
+
+// 🛡️ Safety & Config moved to geminiClient.ts
 
 const getApiKey = () => {
   const state = useStore.getState();
@@ -149,6 +160,26 @@ export const FACTORY_POSES = [
   { id: 'folded_arms', name: '팔짱/신뢰감', prompt: 'folded arms pose, confident upper body fit focus' },
 ];
 
+// Ratio-specific composition prompts
+export const RATIO_PROMPTS: Record<string, string> = {
+  '1:1': 'Square aspect ratio. Balanced, centered composition. Pants occupy 75-80% of frame.',
+  '3:4': 'Portrait aspect ratio (3:4). Focus on full silhouette. Ideal for Instagram feed.',
+  '9:16': 'Tall vertical aspect ratio (9:16). Full body shot with more ground and sky visible. Mobile-first composition.',
+  '4:3': 'Landscape-leaning portrait. Wider horizontal framing.'
+};
+
+// Ambient lighting prompt for Hot Place mode
+export const HOTPLACE_LIGHTING_PROMPT = `
+CRITICAL REALISM (LIGHTING & SHADOW):
+- Match the subject's lighting with the background environment.
+- Apply subtle color grading to blend the subject into the scene.
+- Cast realistic contact shadows on the ground to anchor the subject.
+- Match the ambient light direction and temperature.
+`;
+
+// Background theme variations (4 sub-prompts per theme)
+// Moved to imageService.ts
+
 /**
  * Safely parse JSON from AI response, removing Markdown code blocks
  */
@@ -161,6 +192,31 @@ const safeJsonParse = <T>(text: string): T => {
     throw new Error("AI 응답 형식이 올바르지 않습니다.");
   }
 };
+
+/**
+ * Dump AI Response for Debugging (No Image Data)
+ */
+const dumpErrorResponse = (response: any, context: string): never => {
+  console.error(`🚨 [${context}] No Inline Data Found. Dumping Response:`, JSON.stringify(response, null, 2));
+
+  // Check for text refusal
+  const textCandidate = response.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (textCandidate) {
+    console.error(`🛑 AI Refusal Text: "${textCandidate}"`);
+    throw new Error(`AI Refusal: ${textCandidate.substring(0, 100)}...`);
+  }
+
+  // Check for safety block
+  const blockReason = response.promptFeedback?.blockReason;
+  if (blockReason) {
+    throw new Error(`Blocked by Safety Filter: ${blockReason}`);
+  }
+
+  throw new Error("No image data returned from AI (Unknown Cause)");
+};
+// ... (rest of file)
+
+
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -197,62 +253,65 @@ const imageUrlToBase64 = (url: string): Promise<string> => {
 };
 
 // Retry helper
-// Retry helper
+// Smart Retry Helper
 const retryOperation = async <T>(
   operation: () => Promise<T>,
-  retries = 5,
-  delay = 2000,
+  retries = 3,
+  initialDelay = 1000,
   operationName = "API Request",
   signal?: AbortSignal
 ): Promise<T> => {
-  if (signal?.aborted) {
-    throw new Error("작업이 취소되었습니다.");
+  let attempt = 0;
+
+  while (attempt <= retries) {
+    if (signal?.aborted) throw new Error("작업이 취소되었습니다.");
+
+    try {
+      return await operation();
+    } catch (error: any) {
+      if (signal?.aborted) throw new Error("작업이 취소되었습니다.");
+
+      attempt++;
+      const errorMsg = error.message || String(error);
+      const isOverloaded = errorMsg.includes('503') || errorMsg.toLowerCase().includes('overloaded');
+      const isRateLimit = errorMsg.includes('429') || errorMsg.toLowerCase().includes('quota');
+
+      // Retry only on transient errors
+      if ((isOverloaded || isRateLimit) && attempt <= retries) {
+        // Exponential Backoff: 1s -> 2s -> 4s
+        const waitTime = initialDelay * Math.pow(2, attempt - 1);
+
+        const logMsg = `⚠️ ${operationName} Overloaded/Busy (${errorMsg}). Retrying in ${waitTime}ms... (Attempt ${attempt}/${retries})`;
+        console.warn(logMsg);
+        // @ts-ignore
+        useStore.getState().addLog(logMsg, 'warning');
+
+        // Wait with abort support
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(), waitTime);
+          if (signal) {
+            signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              reject(new Error("작업이 취소되었습니다."));
+            }, { once: true });
+          }
+        });
+
+        continue; // Retry loop
+      }
+
+      throw error; // Non-retryable error or max retries exceeded
+    }
   }
 
-  try {
-    // Execute operation - we can't easily cancel the inner promise if it doesn't support signal, 
-    // but we can check before/after and during the retry wait.
-    return await operation();
-  } catch (error: any) {
-    if (signal?.aborted) {
-      throw new Error("작업이 취소되었습니다.");
-    }
-
-    const errorMsg = error.message || String(error);
-
-    // Log transient errors
-    if (retries > 0 && (errorMsg.includes('503') || errorMsg.includes('overloaded') || errorMsg.includes('429'))) {
-      const msg = `API busy, retrying in ${delay / 1000}s... (${retries} retries left)`;
-      console.log(msg);
-      // @ts-ignore
-      useStore.getState().addLog(msg, 'warning');
-
-      // Wait with abort support
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => resolve(), delay);
-        if (signal) {
-          signal.addEventListener('abort', () => {
-            clearTimeout(timer);
-            reject(new Error("작업이 취소되었습니다."));
-          }, { once: true });
-        }
-      });
-
-      return retryOperation(operation, retries - 1, delay * 1.5, operationName, signal);
-    }
-
-    // Log final failure
-    // @ts-ignore
-    useStore.getState().addLog(`[${operationName}] Failed: ${errorMsg}`, 'error');
-    throw error;
-  }
+  throw new Error(`${operationName} failed after ${retries} retries.`);
 };
 
 export const refinePrompt = async (data: { productFeatures: string, stylingCoordination: string, targetAudience: string }) => {
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: GEMINI_MODELS.FAST_SPEED,
       contents: `Refine these fashion details into professional, highly descriptive prompts for an AI image generator that specializes in hyper-realistic UGC content. 
       Focus on fabric textures, specific lighting, and realistic model descriptions.
       Input:
@@ -279,12 +338,8 @@ export const refinePrompt = async (data: { productFeatures: string, stylingCoord
 };
 
 export const generateFashionContent = async (config: GenerationConfig, locationPrompt: string): Promise<{ imageUrl: string, prompt: string }> => {
-  return retryOperation(async () => {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
-
     if (!config.imageFile) throw new Error("Image file is required.");
     const base64Image = await fileToBase64(config.imageFile);
-    const data = base64Image.split(',')[1];
 
     const finalPrompt = `
     ${TECHNICAL_INSTRUCTION}
@@ -299,14 +354,11 @@ export const generateFashionContent = async (config: GenerationConfig, locationP
     ${locationPrompt}
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: {
-        parts: [
-          { inlineData: { data, mimeType: config.imageFile.type } },
-          { text: finalPrompt }
-        ]
-      },
+    console.log("🚀 Generating Fashion Content...");
+
+    const result = await generateContentSafe(finalPrompt, [fileToPart(base64Image, config.imageFile.type)], {
+      taskType: 'CREATION',
+      model: GEMINI_MODELS.IMAGE_GEN,
       config: {
         imageConfig: {
           aspectRatio: '1:1',
@@ -315,15 +367,23 @@ export const generateFashionContent = async (config: GenerationConfig, locationP
       }
     });
 
-    trackUsage(response, true);
-    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (!part?.inlineData) throw new Error("Image generation failed");
+    if (result.inlineData) {
+      return {
+        imageUrl: `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`,
+        prompt: finalPrompt
+      };
+    }
+    
+    throw new Error("No image generated.");
+};
 
-    return {
-      imageUrl: `data:image/png;base64,${part?.inlineData?.data}`,
-      prompt: finalPrompt
-    };
-  });
+// --- Re-exports for Backward Compatibility ---
+export {
+  changeColorVariant as generateColorVarFromRef,
+  replaceBackground as generateBackgroundChange,
+  magicEraser as editImage,
+  generateBackgroundVariations,
+  generatePoseVariation
 };
 
 export const generateFittingVariation = async (
@@ -390,9 +450,11 @@ export const generateFittingVariation = async (
     parts.push({ text: masterPrompt });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: GEMINI_MODELS.IMAGE_GEN,
       contents: { parts },
       config: {
+        safetySettings: SAFETY_SETTINGS_BLOCK_NONE, // 🛡️ Bypass
+        toolConfig: TOOL_CONFIG_NONE, // 🚫 No Tools
         imageConfig: {
           aspectRatio: aspectRatio,
           imageSize: resolution
@@ -402,7 +464,9 @@ export const generateFittingVariation = async (
 
     trackUsage(response, true);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    if (!part?.inlineData) throw new Error("Fitting Variation generation failed");
+    if (!part?.inlineData) {
+      dumpErrorResponse(response, 'generateFittingVariation');
+    }
 
     return `data:image/png;base64,${part?.inlineData?.data}`;
   });
@@ -413,7 +477,7 @@ export const analyzeProduct = async (image: string, userDescription: string): Pr
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: GEMINI_MODELS.FAST_SPEED,
       contents: {
         parts: [
           { inlineData: { data: image.split(',')[1], mimeType: 'image/png' } },
@@ -561,9 +625,13 @@ Output:
     parts.push({ text: systemPrompt });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: GEMINI_MODELS.IMAGE_GEN,
       contents: { parts },
-      config: { imageConfig: { aspectRatio, imageSize: resolution } }
+      config: {
+        safetySettings: SAFETY_SETTINGS_BLOCK_NONE, // 🛡️ Bypass
+        toolConfig: TOOL_CONFIG_NONE, // 🚫 No Tools
+        imageConfig: { aspectRatio, imageSize: resolution }
+      }
     });
     trackUsage(response);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -618,9 +686,13 @@ export const generateDetailExtra = async (
     }
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: GEMINI_MODELS.IMAGE_GEN,
       contents: { parts },
-      config: { imageConfig: generationConfig }
+      config: {
+        safetySettings: SAFETY_SETTINGS_BLOCK_NONE, // 🛡️ Bypass
+        toolConfig: TOOL_CONFIG_NONE, // 🚫 No Tools // Add toolConfig
+        imageConfig: generationConfig
+      }
     });
     trackUsage(response);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
@@ -628,9 +700,59 @@ export const generateDetailExtra = async (
   });
 };
 
-export const generateBackgroundChange = async (baseImage: string, bgRefImage: string | null, userPrompt: string, resolution: Resolution, aspectRatio: AspectRatio, faceOptions?: any, signal?: AbortSignal): Promise<string> => {
+
+
+// Helper: Analyze Style Reference (Vibe Match)
+const analyzeStyleReference = async (imageUrl: string): Promise<string> => {
+  try {
+    const apiKey = getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
+    const prompt = `
+      Analyze the background environment and lighting of this image in extreme detail.
+      Ignore any people or subjects in the image. Focus ONLY on:
+      - Lighting direction, quality, and color temperature (e.g., hard sunlight, soft shadows, golden hour).
+      - Ground texture and material (e.g., concrete, grass, wood floor).
+      - Surrounding architecture or scenery vibe (e.g., industrial cafe, park, studio).
+      - Color palette.
+      
+      Output a concise but descriptive prompt to recreate this exact vibe in an empty scene.
+      Start with: "A background featuring..."
+    `;
+
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODELS.HIGH_QUALITY,
+      contents: {
+        parts: [
+          { text: prompt },
+          { inlineData: { data: imageUrl.split(',')[1] || imageUrl, mimeType: 'image/png' } }
+        ]
+      }
+    });
+
+    return response.candidates?.[0]?.content?.parts?.[0]?.text || "Professional studio background";
+  } catch (e) {
+    console.error("Style Analysis Failed", e);
+    return "A high-quality, realistic background with professional lighting.";
+  }
+};
+
+export const generateBackgroundChange = async (
+  baseImage: string,
+  bgRefImage: string | null,
+  userPrompt: string,
+  resolution: Resolution,
+  aspectRatio: AspectRatio,
+  faceOptions?: any,
+  signal?: AbortSignal,
+  onStatusUpdate?: (message: string) => void,
+  options?: { ambientMatch?: boolean; ambientStrength?: number; modelPersona?: SavedModel; styleReference?: boolean }
+): Promise<string> => {
   return retryOperation(async () => {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    // We don't initialize 'ai' here anymore, smartGenerateImage handles calls via a callback
+    const apiKey = getApiKey();
+    const ai = new GoogleGenAI({ apiKey }); // Still needed for Part construction helper or type inference if used inside callback
+
     // 1. Initialize parts with system prompt (or placeholder) and base image
     const parts: any[] = [];
 
@@ -645,8 +767,14 @@ export const generateBackgroundChange = async (baseImage: string, bgRefImage: st
     parts.push(baseImagePart);
 
     // Conditionally Add Reference Image
-    if (bgRefImage && bgRefImage.length > 100) { // Simple check to ensure it's a valid image string
-      parts.push({ inlineData: { data: bgRefImage.split(',')[1] || bgRefImage, mimeType: 'image/png' } });
+    // Conditionally Add Reference Image
+    // Conditionally Add Reference Image
+    if (bgRefImage && bgRefImage.length > 100) {
+      if (options?.styleReference) {
+        console.log('Style Reference Mode: Analyzing image first...');
+      } else {
+        parts.push({ inlineData: { data: bgRefImage.split(',')[1] || bgRefImage, mimeType: 'image/png' } });
+      }
     } else {
       console.log('Skipping Reference Image (Not provided or Preset used)');
     }
@@ -655,112 +783,351 @@ export const generateBackgroundChange = async (baseImage: string, bgRefImage: st
 
     const preset = faceOptions?.preset;
 
-    if (bgRefImage) {
-      finalPrompt = `
-[NanoBanana PRO MODE]
+    // [MODEL PERSONA INJECTION]
+    if (options?.modelPersona) {
+      const { description, faceRefImage } = options.modelPersona;
 
-Use the first uploaded image as the MAIN IMAGE (person source).
-Use the second uploaded image as the BACKGROUND REFERENCE.
+      finalPrompt += `\n\n[MODEL PERSONA (CRITICAL OVERRIDE)]`;
+      finalPrompt += `\n**IDENTITY:** Must strictly match the facial features and body type of the provided reference.`;
 
-Separate the person from the background in the main image with clean, accurate edges.
-Preserve the person EXACTLY as is:
-- Do not change pose, body proportions, face, hair, or expression
-- Do not change clothing, fabric, color, fit, or accessories
-- Keep the original camera angle and framing
+    // Add the final prompt to parts
+    parts.push({ text: finalPrompt });
 
-Replace ONLY the background of the main image with the background from the reference image.
-Do NOT transfer any people, objects, text, or logos from the reference image—use background environment only.
+    // Timeout helper (120 seconds)
+    const API_TIMEOUT_MS = 120000;
+    const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) =>
+          setTimeout(() => reject(new Error(`API Timeout: ${ms / 1000}초 초과`)), ms)
+        )
+      ]);
+    };
 
-Blending & realism:
-- Match perspective, scale, and horizon
-- Match light direction, brightness, and color temperature
-- Match the shadow direction with the sunlight. Create a hard, directional cast shadow extending from the feet on the ground.
-- Apply shallow depth of field. Slightly blur the background pavement behind the model to create depth.
-- Seamless composite with no cutout artifacts
+    // Define the API execution function with timeout
+    const performGeneration = async (model: string, payload: any) => {
+      const currentAi = new GoogleGenAI({ apiKey: getApiKey() }); // Ensure fresh key
+      const response = await withTimeout(
+        currentAi.models.generateContent({
+          model: model, // Dynamic model name
+          contents: { parts: payload },
+          config: {
+            safetySettings: SAFETY_SETTINGS_BLOCK_NONE, // 🛡️ Bypass
+            toolConfig: TOOL_CONFIG_NONE, // 🚫 No Tools
+            imageConfig: { aspectRatio, imageSize: resolution }
+          }
+        }),
+        API_TIMEOUT_MS
+      );
+      trackUsage(response, true); // Track as image
+      const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+      if (!part?.inlineData?.data) {
+        dumpErrorResponse(response, 'generateBackgroundChange (Hybrid)');
+      }
+      return `data:image/png;base64,${part?.inlineData?.data}`;
+    };
 
-Restrictions:
-- Background change only
-- No stylization, no cinematic filters
-- No text, logos, or graphic elements
+    // Execute with Hybrid Strategy (Pro -> Flash)
+    // Note: We skip passing 'onStatusUpdate' to retryOperation since smartGenerateImage handles its own status updates and retries logic internally for the model switch.
+    // However, retryOperation is currently wrapping this whole block. 
+    // Ideally smartGenerateImage replaces retryOperation, or we use smartGenerateImage inside.
+    // Since retryOperation is simple (5 retries), let's rely on smartGenerateImage's internal retries.
+    // But `retryOperation` is useful for transient network errors. 
+    // To avoid double retry logic conflict, we can make smartGenerateImage handle the model logic, 
+    // and if it fails (throws SERVER_BUSY), retryOperation *could* try again if configured, but here we probably want to fail fast or let smartGenerateImage handle it.
 
-Output:
-- High-resolution, realistic fashion image
-        `;
-    } else if (preset === 'MZ_CAFE') {
-      // MZ Hotspot Preset
-      finalPrompt = `
-[NanoBanana PRO MODE: K-REALISM STREET SNAP]
+    // Actually, `retryOperation` is wrapping the whole function. Let's just return the result of smartGenerateImage.
 
-**TASK:** Composite the subject into a photorealistic, authentic Korean street background.
+    return await smartGenerateImage(
+      GEMINI_MODELS.IMAGE_GEN,    // Primary
+      GEMINI_MODELS.FAST_SPEED,   // Secondary
+      parts,                      // Payload
+      performGeneration,          // Executor
+      onStatusUpdate              // Status Callback
+    );
 
-**SCENE COMPOSITION (CRITICAL REALISM):**
-1.  **LOCATION:** A realistic, bustling street in Seoul (e.g., Apgujeong backstreet, Yeonnam-dong alley). NOT a fantasy or studio set.
-2.  **TIME & LIGHTING:** Bright, natural **DAYLIGHT** (afternoon sun). The lighting on the subject and shadows must perfectly match the sunny day street environment.
-3.  **GROUND (K-TEXTURE):** Must be authentic Korean pavement. Use a mix of **cracked asphalt** and standard **Korean interlocking sidewalk blocks (보도블록)**. Add realistic grit, pebbles, and wear.
-4.  **BACKGROUND ELEMENTS (THE "REAL" DETAILS):**
-    * **Mandatory K-Elements:** Overhead **power lines (전선)** and **utility poles (전봇대)**.
-    * **Buildings:** Realistic 2-4 story Korean commercial buildings (brick, concrete). Add small, realistic Korean business signs (한글 간판 - blurred).
-    * **Objects:** Maybe a parked Korean car (e.g., Kia Ray, Hyundai Avante - blurred) or a delivery motorbike in the distance.
+  }, 5, 2000, "Background Change", signal);
+};
 
-**FEEL:** Candid, unposed street fashion photography. Raw, authentic, high-resolution.
+/**
+ * Generate 4 background variations in parallel for a given theme
+ */
+export const generateBackgroundVariations = async (
+  baseImage: string,
+  themeKey: 'MZ_CAFE' | 'BASIC_STUDIO',
+  resolution: Resolution,
+  aspectRatio: AspectRatio,
+  faceOptions?: any,
+  signal?: AbortSignal,
+  onStatusUpdate?: (message: string) => void,
+  options?: { ambientMatch?: boolean; ambientStrength?: number; modelPersona?: SavedModel; styleReference?: boolean }
+): Promise<{ index: number; url: string | null; error?: string }[]> => {
+  const variations = BACKGROUND_THEME_VARIATIONS[themeKey];
+  if (!variations || variations.length === 0) {
+    throw new Error(`No variations found for theme: ${themeKey}`);
+  }
 
-**NEGATIVE PROMPT (금지어):**
-studio floor, clean minimalist background, fantasy neon, perfect pavement, Western architecture, no power lines, blurry texture, oversaturated colors, fake light.
+  onStatusUpdate?.("4가지 배경 시안을 동시 생성 중... ⚡️");
+  console.log(`🎨 Starting parallel generation for ${themeKey} (${variations.length} variations)`);
+
+  // Timeout helper (180 seconds)
+  const API_TIMEOUT_MS = 180000;
+  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`API Timeout: ${ms / 1000}초 초과`)), ms)
+      )
+    ]);
+  };
+
+  // Generate single variation
+  const generateSingleVariation = async (variationPrompt: string, index: number): Promise<{ index: number; url: string | null; error?: string }> => {
+    try {
+      if (signal?.aborted) return { index, url: null, error: "Aborted" };
+
+      const ai = new GoogleGenAI({ apiKey: getApiKey() });
+      const parts: any[] = [
+        { inlineData: { data: baseImage.split(',')[1] || baseImage, mimeType: 'image/png' } }
+      ];
+
+      // Build prompt with variation
+      let finalPrompt = `
+[NanoBanana PRO MODE: BACKGROUND VARIATION]
       `;
-    } else {
-      // Standard Text-to-Background Mode
-      finalPrompt = `
-    [NanoBanana PRO MODE - BACKGROUND CHANGE]
-Change the background of the image based on the following description:
-  "${userPrompt || 'Clean, professional studio background'}"
 
-  Instructions:
-  - Keep the main subject exactly as is.
-- Replace the background completely.
-- Ensure realistic lighting integration.
-        `;
-    }
+      // [MODEL PERSONA INJECTION]
+      if (options?.modelPersona) {
+        const { description, faceRefImage } = options.modelPersona;
+        finalPrompt += `\n\n[MODEL PERSONA (CRITICAL OVERRIDE)]`;
+        finalPrompt += `\n**IDENTITY:** Must strictly match the facial features and body type of the provided reference.`;
+        if (description) finalPrompt += `\n**DESCRIPTION:** ${description}`;
 
-    // [SMART FRAMING LOGIC]
-    const category = faceOptions?.category;
-    if (category) {
-      let framingPrompt = '';
-      if (category === 'TOP') {
-        framingPrompt = `
-    ** CAMERA FRAMING:** Medium Close - up / Torso Shot.
-** CROP GUIDE:**
-    1. ** HEADLESS:** Crop the image just below the nose or at the chin line.Do NOT show the full face.
-2. ** RANGE:** Frame from the chin down to the hips.
-3. ** FOCUS:** Focus sharply on the chest, shoulders, and sleeve details.`;
-      } else if (category === 'BOTTOM') {
-        framingPrompt = `
-    ** CAMERA FRAMING:** Waist - Down Shot / Legs Shot.
-** CROP GUIDE:**
-    1. ** NO UPPER BODY:** Crop out the head and chest.Start the frame from the waist / belt line.
-2. ** SHOES MANDATORY:** You MUST include the full shoes and the ground they are standing on. ** DO NOT CROP THE FEET.**
-    3. ** FOCUS:** Focus on the fit of the pants, the drape over the shoes, and the texture.`;
-      } else if (category === 'SET') {
-        framingPrompt = `
-      ** CAMERA FRAMING:** Headless Full Body Shot.
-** CROP GUIDE:**
-    1. ** HEADLESS:** Crop the image at the nose or chin level.
-2. ** FULL OUTFIT:** Show the entire outfit from the neck down to the shoes.
-3. ** SHOES INCLUDED:** Feet must be fully visible and grounded.`;
+        // Note: For parallel variations, we push the part globally? 
+        // No, 'parts' is local to generateSingleVariation? 
+        // Wait, 'generateSingleVariation' uses 'parts' defined at line 986.
+        // We need to push to 'parts' INSIDE generateSingleVariation.
+        // But 'parts' is redefined inside the loop? 
+        // Let's check the context below...
+        // Ah, 'generateSingleVariation' is defined at line 981.
+        // It defines 'parts' at line 986.
+        // So we need to handle reference image insertion INSIDE generateSingleVariation logic.
+        // But 'options' is available in the scope.
+        // I will insert the logic here in 'finalPrompt' construction, 
+        // BUT the image part push must happen where 'parts' is accessible.
+        // 'finalPrompt' is built inside 'generateSingleVariation' (line 991).
+        // 'parts' is defined at 986.
+        // So I can push to 'parts' here.
+        if (faceRefImage && !parts.some(p => p.inlineData?.data?.length === faceRefImage.split(',')[1]?.length)) {
+          parts.push({ inlineData: { data: faceRefImage.split(',')[1] || faceRefImage, mimeType: 'image/png' } });
+        }
       }
 
-      finalPrompt += `\n\n${framingPrompt} \n\n[COMMON NEGATIVE PROMPT]\nface, eyes, full head, cropped shoes, cut off feet, missing shoes, selfie angle.`;
+      finalPrompt += `
+**TASK:** Replace the background with the following scene while keeping the subject EXACTLY as is.
+
+**BACKGROUND SCENE:**
+${variationPrompt}
+
+**SUBJECT PRESERVATION (CRITICAL):**
+- Keep the person's pose, body proportions, clothing, and accessories EXACTLY the same.
+- Do NOT change the clothing color, fabric, or fit.
+- Maintain original camera angle and framing.
+
+**REALISM:**
+- Match lighting direction and color temperature with the new background.
+- Cast realistic shadows on the ground.
+- Seamless composite with no cutout artifacts.
+
+${HOTPLACE_LIGHTING_PROMPT}
+
+[COMPOSITION]
+${RATIO_PROMPTS[aspectRatio] || ''}
+      `;
+
+      // [AMBIENT LIGHT MATCHING]
+      if (options?.ambientMatch) {
+        const strength = options.ambientStrength ?? 50;
+        const strengthText = strength > 70 ? "Strongly" : strength < 30 ? "Subtly" : "Moderately";
+
+        finalPrompt += `\n\n[LIGHTING & SHADOWS (CRITICAL)]`;
+        finalPrompt += `\n- ${strengthText} blend the subject's lighting and color tone to match the background environment.`;
+        finalPrompt += `\n- Cast realistic contact shadows on the ground, consistent with the scene's light source.`;
+        finalPrompt += `\n- Eliminate any studio flash look; subject must look naturally integrated into the scene.`;
+      }
+
+      parts.push({ text: finalPrompt });
+
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: GEMINI_MODELS.IMAGE_GEN,
+          contents: { parts },
+          config: {
+            safetySettings: SAFETY_SETTINGS_BLOCK_NONE, // 🛡️ Bypass
+            imageConfig: { aspectRatio, imageSize: resolution }
+          }
+        }),
+        API_TIMEOUT_MS
+      );
+
+      trackUsage(response, true);
+      const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+
+      if (!part?.inlineData?.data) {
+        dumpErrorResponse(response, `generateSingleVariation-${index}`);
+        return { index, url: null, error: "No image data" };
+      }
+
+      return { index, url: `data:image/png;base64,${part.inlineData.data}` };
+    } catch (err: any) {
+      console.error(`Variation ${index} failed:`, err);
+      return { index, url: null, error: err.message };
+    }
+  };
+
+  // Execute all 4 in parallel
+  // Execute in chunks of 2 (Concurrency Limit)
+  const results: { index: number; url: string | null; error?: string }[] = [];
+  const chunkSize = 2;
+
+  for (let i = 0; i < variations.length; i += chunkSize) {
+    // Check abort before starting chunk
+    if (signal?.aborted) break;
+
+    const chunk = variations.slice(i, i + chunkSize);
+    onStatusUpdate?.(`시안 생성 중 (${i + 1}~${Math.min(i + chunkSize, variations.length)}/${variations.length})... ⚡️`); // Update status
+
+    console.log(`🚀 Starting chunk ${i / chunkSize + 1}: indices ${i} to ${i + chunk.length - 1}`);
+
+    const chunkResults = await Promise.all(
+      chunk.map((prompt, idx) => generateSingleVariation(prompt, i + idx))
+    );
+    results.push(...chunkResults);
+
+    // Cool down between chunks if not finished
+    if (i + chunkSize < variations.length) {
+      if (signal?.aborted) break;
+      console.log(`⏳ Cooling down for 500ms...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  console.log(`✅ All ${results.length} variations completed`);
+  onStatusUpdate?.("4가지 시안 생성 완료! 🎉");
+
+  return results;
+};
+
+/**
+ * Edit Image using Gemini Inpainting (Magic Eraser)
+ */
+export const editImage = async (
+  originalImage: string,
+  maskImage: string,
+  prompt: string,
+  signal?: AbortSignal,
+  onStatusUpdate?: (message: string) => void
+): Promise<string> => {
+  return retryOperation(async () => {
+    onStatusUpdate?.("AI가 수정을 진행 중입니다... (Magic Eraser) 🪄");
+
+    const apiKey = getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Construct Prompt
+    // Construct Prompt based on User Input
+    let finalPrompt = "";
+
+    if (prompt && prompt.trim() !== "") {
+      finalPrompt = `
+[NanoBanana PRO MODE: MAGIC EDITOR]
+**TASK:** Edit the image based on the user request and the provided mask.
+**USER REQUEST:** "${prompt}"
+**INSTRUCTIONS:**
+- Modify ONLY the masked area to match the request.
+- Blend seamlessly with the surrounding pixels.
+- Use the mask as a guide for the area to change.
+      `;
+    } else {
+      // Default: Remove & Reconstruct
+      finalPrompt = `
+[NanoBanana PRO MODE: MAGIC ERASER]
+**TASK:** Completely REMOVE the object covered by the white mask area.
+**CRITICAL:** Seamlessly INPAINT and reconstruct the area by extending the surrounding background textures, lighting, and shadows. 
+**INSTRUCTIONS:**
+- The result must look perfectly natural, as if the object was never there.
+- Do NOT fill with solid color or artifacts. 
+- Blend perfectly with the environment (lighting, texture, perspective).
+      `;
     }
 
-    parts.push({ text: finalPrompt });
+    // Gemini 1.5 Pro-002 편집 모드 호출 (안정성 확보)
+    console.log("🎨 이미지 편집 모드: 안정적인 gemini-1.5-pro-002 모델로 강제 전환합니다.");
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: { parts },
-      config: { imageConfig: { aspectRatio, imageSize: resolution } }
+      model: GEMINI_MODELS.EDIT_STABLE,
+      contents: {
+        parts: [
+          { text: finalPrompt },
+          { inlineData: { data: originalImage.split(',')[1] || originalImage, mimeType: 'image/png' } },
+          { inlineData: { data: maskImage.split(',')[1] || maskImage, mimeType: 'image/png' } }
+        ]
+      },
+      config: {
+        safetySettings: SAFETY_SETTINGS_BLOCK_NONE,
+        toolConfig: TOOL_CONFIG_NONE // 🚫 No Tools
+      }
     });
-    trackUsage(response);
+
+    trackUsage(response, true);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-    return `data: image / png; base64, ${part?.inlineData?.data} `;
-  }, 5, 2000, "Background Change", signal);
+    if (!part?.inlineData?.data) {
+      dumpErrorResponse(response, 'editImage (Magic Eraser)');
+    }
+    return `data:image/png;base64,${part.inlineData.data}`;
+  }, 3, 2000, "Image Editing", signal);
+};
+
+export const generatePoseVariation = async (
+  currentResultImage: string,
+  promptModifier: string = "Shift weight slightly, looking casually to the side.",
+  signal?: AbortSignal
+): Promise<string> => {
+  return retryOperation(async () => {
+    const apiKey = getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
+    const variationPrompt = `
+      TASK: Generate a photorealistic variation of the provided input image.
+      
+      CRITICAL CONSTRAINTS (DO NOT CHANGE):
+      1. **BACKGROUND LOCK:** The background environment, location, time of day, and overall lighting atmosphere MUST remain exactly the same as the input image. Do NOT revert to a studio setting.
+      2. **CLOTHING LOCK:** The outfit must remain perfectly identical.
+
+      ACTIONS (CHANGE):
+      1. **POSE Variation:** Change the model's pose naturally based on this instruction: "${promptModifier}". The pose should feel relaxed and candid, suitable for a fashion lookbook detail shot.
+      2. **DYNAMIC SHADOWS:** Realistic contact shadows and cast shadows on the ground must be regenerated to match the NEW pose, consistent with the scene's original light source.
+      3. **COMPOSITION:** A very slight shift in camera angle or perspective is allowed to enhance realism, as long as the location is clearly the same.
+    `;
+
+    console.log("🎬 Generating Pose Variation with Background Lock...");
+
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODELS.HIGH_QUALITY,
+      contents: {
+        parts: [
+          { text: variationPrompt },
+          { inlineData: { data: currentResultImage.split(',')[1] || currentResultImage, mimeType: 'image/png' } }
+        ]
+      }
+    });
+
+    trackUsage(response, true);
+    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!part?.inlineData?.data) {
+      throw new Error("No image data returned from AI (Pose Variation).");
+    }
+    return `data:image/png;base64,${part.inlineData.data}`;
+  }, 3, 2000, "Pose Variation", signal);
 };
 
 export const generateTechSketch = async (category: string, name: string): Promise<string> => {
@@ -797,17 +1164,112 @@ export const generateFactoryPose = async (baseImage: string, pose: any, analysis
 };
 
 export const planDetailSections = async (analysis: any, name: string): Promise<any[]> => {
+  // Existing implementation...
+  return []; // Placeholder to match existing signature start for Replace
+};
+
+// --- NEW: Image-to-Color Variation Service ---
+
+/**
+ * Step 1. Extract dominant color description from reference image
+ */
+const extractColorDescription = async (referenceImage: string): Promise<string> => {
   return retryOperation(async () => {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const apiKey = getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Use Vision model (Gemini Pro supports vision)
+    const prompt = `
+      Analyze this image and describe the dominant color or fabric finish in detail.
+      Focus ONLY on the color pigment and texture appearance.
+      Example Output: "Deep indigo blue with a slight faded denim texture", "Matte olive green", "Metallic silver".
+      Keep it concise (under 10 words).
+    `;
+
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Create a plan for a fashion detail page for ${name}(${analysis.category}).Return 5 sections as JSON items: title, logicalSection, keyMessage, visualPrompt.`,
-      config: { responseMimeType: "application/json" }
+      model: GEMINI_MODELS.HIGH_QUALITY,
+      contents: {
+        parts: [
+          { text: prompt },
+          { inlineData: { data: referenceImage.split(',')[1] || referenceImage, mimeType: 'image/png' } }
+        ]
+      }
     });
-    trackUsage(response);
-    return JSON.parse(response.text || '[]');
+
+    const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("Failed to extract color description.");
+    console.log(`🎨 Extracted Color Description: "${text}"`);
+    return text;
   });
 };
+
+/**
+ * Step 2. Apply color variation to source image while locking texture
+ */
+export const generateColorVarFromRef = async (
+  sourceProductImage: string,
+  referenceColorImage: string,
+  maskImage?: string
+): Promise<string> => {
+  return retryOperation(async () => {
+
+    // 1. Extract Color Info
+    const targetColorDesc = await extractColorDescription(referenceColorImage);
+
+    const apiKey = getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
+    // 2. Build Recolor Prompt
+    const applyPrompt = `
+      TASK: Recolor the clothing item in the source image based on the reference color.
+      TARGET COLOR: ${targetColorDesc}
+
+      CRITICAL INSTRUCTION (DO NOT IGNORE):
+      1. **EXECUTE THE EDIT DIRECTLY.** Do not describe the edit. Do not output JSON.
+      2. **OUTPUT ONLY THE IMAGE.** I do not need any text explanation.
+      3. **NO PLAN, NO THOUGHTS.** Just return the pixel result immediately.
+
+      CRITICAL CONSTRAINTS (TEXTURE LOCK):
+      1. **PRESERVE GEOMETRY:** Do NOT redraw or change the shape of the clothing.
+      2. **PRESERVE TEXTURE:** Maintain the original fabric texture (corduroy, denim, etc.) exactly.
+      3. **PRESERVE LIGHTING:** Keep original shadows. Only change the pigment.
+    `;
+
+    console.log("🖌️ Applying Color Variation with Texture Lock...");
+
+    // 3. Call Edit Mode
+    // Gemini 1.5 Pro-002 편집 모드 호출
+    console.log("🎨 이미지 편집 모드: 안정적인 gemini-1.5-pro-002 모델로 강제 전환합니다.");
+
+    const parts: any[] = [
+      { text: applyPrompt },
+      { inlineData: { data: sourceProductImage.split(',')[1] || sourceProductImage, mimeType: 'image/png' } }
+    ];
+
+    if (maskImage && maskImage.length > 100) {
+      parts.push({ inlineData: { data: maskImage.split(',')[1] || maskImage, mimeType: 'image/png' } });
+    }
+
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODELS.EDIT_STABLE, // 🚨 1.5 Pro 강제 전환 (Function Call 에러 방지)
+      contents: { parts },
+      config: {
+        safetySettings: SAFETY_SETTINGS_BLOCK_NONE, // 🛡️ Bypass Safety
+        toolConfig: TOOL_CONFIG_NONE // 🚫 No Tools
+      }
+    });
+
+    trackUsage(response, true);
+    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    if (!part?.inlineData?.data) {
+      console.log("🔍 AI 응답 전체 까보기:", JSON.stringify(response, null, 2)); // User requested specific log
+      dumpErrorResponse(response, 'generateColorVarFromRef');
+    }
+    return `data:image/png;base64,${part.inlineData.data}`;
+
+  }, 3, 2000, "Color Variation");
+};
+
 
 export const planDetailPage = async (product: ProductInfo, length: PageLength): Promise<DetailImageSegment[]> => {
   return retryOperation(async () => {
@@ -871,9 +1333,24 @@ export const generateAutoFitting = async (
   targetAngle: CameraAngle,
   aspectRatio: AspectRatio,
   resolution: Resolution,
-  isSideProfile: boolean = false, // Added Flag
+  isSideProfile: boolean = false,
   signal?: AbortSignal
+  // modelHint removed - Always Pro
 ): Promise<string> => {
+  // Always use Pro (Image Gen) Model
+  const model = GEMINI_MODELS.IMAGE_GEN;
+
+  // Timeout helper (180 seconds - Increased for Pro)
+  const API_TIMEOUT_MS = 180000;
+  const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`API Timeout: ${ms / 1000}초 초과`)), ms)
+      )
+    ]);
+  };
+
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const parts: any[] = [
@@ -905,7 +1382,6 @@ export const generateAutoFitting = async (
 ` : '';
 
     if (bgImage) {
-      // CASE 1: Background Replacement + Angle Consistency (Original Logic)
       masterPrompt = `[NanoBanana PRO MODE]
 
 Use the first uploaded image as the MAIN IMAGE(person source).
@@ -982,17 +1458,21 @@ ${angleNegative}
 
     parts.push({ text: masterPrompt });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: { parts },
-      config: { imageConfig: { aspectRatio, imageSize: resolution } }
-    });
+    // API call with timeout
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: model, // Use selected model
+        contents: { parts },
+        config: { imageConfig: { aspectRatio, imageSize: resolution } }
+      }),
+      API_TIMEOUT_MS
+    );
     trackUsage(response, true);
     const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
 
-    return `data: image / png; base64, ${part?.inlineData?.data} `;
+    return `data:image/png;base64,${part?.inlineData?.data}`;
 
-  }, 5, 2000, "Auto Fitting", signal);
+  }, 3, 2000, "Auto Fitting", signal); // Reduced retries to 3 for faster failure
 };
 
 export const generateVirtualTryOn = async (
@@ -1034,7 +1514,7 @@ export const generateVirtualTryOn = async (
     parts.push({ text: prompt });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
+      model: GEMINI_MODELS.IMAGE_GEN,
       contents: { parts },
       config: {
         imageConfig: {

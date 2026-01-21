@@ -6,13 +6,24 @@ export type ProductCategory = '상의' | '하의' | '아우터' | '셋업' | '�
 export type MaterialType = '코튼' | '데님' | '나일론' | '울' | '니트' | '기모' | '린넨' | '혼방';
 export type ViewMode = 'full' | 'top' | 'bottom';
 export type PageLength = '5' | '7' | '9' | 'auto';
-export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio';
+export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio' | 'color-variation';
 export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change' | 'outfit-swap';
 
 export type FaceMode = 'ON' | 'OFF' | 'HEADLESS';
 export type Gender = 'Male' | 'Female' | 'UNSPECIFIED';
 export type Mode = 'Single' | 'Couple';
 export type CameraAngle = 'default' | 'front' | 'left-30' | 'left-40' | 'right-30' | 'right-40' | 'left-side' | 'right-side' | 'back';
+
+export interface SavedModel {
+  id: string;
+  name: string;
+  description: string;
+  gender: Gender;
+  previewUrl: string;
+  faceRefImage?: string;
+  seed?: number;
+  createdAt: number;
+}
 
 export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT' | 'DESIGN' | 'TYPOGRAPHY';
 
@@ -38,9 +49,11 @@ export interface VariationResult {
 export interface AutoFittingState {
   productImage: string | null;
   bgImage: string | null;
+  prompt: string;
   results: VariationResult[];
   resolution: Resolution;
   aspectRatio: AspectRatio;
+  selectedAngles: CameraAngle[];
 }
 
 export type SizeCategory = 'short_sleeve' | 'long_sleeve' | 'pants' | 'skirt';

@@ -29,7 +29,7 @@ const storage: StateStorage = {
     await del(name);
   },
 };
-import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult, PageBlock, BlockType, DesignKeyword, VsComparisonItem, ProductCopyAnalysis } from './types';
+import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult, PageBlock, BlockType, DesignKeyword, VsComparisonItem, ProductCopyAnalysis, SavedModel } from './types';
 import { VideoGenerationLog, VideoStatus } from './types/video';
 
 export interface LogEntry {
@@ -37,6 +37,12 @@ export interface LogEntry {
   timestamp: number;
   message: string;
   type: 'info' | 'success' | 'error' | 'warning';
+}
+
+export interface BackgroundHistoryItem {
+  id: string;
+  url: string;
+  timestamp: number;
 }
 
 
@@ -128,14 +134,29 @@ interface AppStore extends ProductState {
   addVideoLog: (log: VideoGenerationLog) => void;
   updateVideoLog: (id: string, updates: Partial<VideoGenerationLog>) => void;
   setActiveVideoLogId: (id: string | null) => void;
+
+  // Background History
+  backgroundHistory: BackgroundHistoryItem[];
+  addToBackgroundHistory: (url: string) => void;
+  clearBackgroundHistory: () => void;
+
+  // Saved Models (Persona)
+  savedModels: SavedModel[];
+  activeModelId: string | null;
+  addSavedModel: (model: SavedModel) => void;
+  removeSavedModel: (id: string) => void;
+  updateSavedModel: (id: string, updates: Partial<SavedModel>) => void;
+  setActiveModelId: (id: string | null) => void;
 }
 
-const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks'> = {
+const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks' | 'setSelectedBlockId' | 'setActiveTab' | 'setDesignKeywords' | 'setComparisons' | 'setUploadedImages' | 'setProductNameInput' | 'setMainImageUrl' | 'setCopyAnalysis' | 'addVideoLog' | 'updateVideoLog' | 'setActiveVideoLogId' | 'addToBackgroundHistory' | 'clearBackgroundHistory' | 'addSavedModel' | 'removeSavedModel' | 'updateSavedModel' | 'setActiveModelId'> = {
   credits: 0,
   user: null, // Supabase User
   brandName: 'NEW BRAND',
   name: '',
   analysis: null,
+  savedModels: [],
+  activeModelId: null,
   sizeTable: [{ id: 'init_free', name: 'FREE' }], // Default one row
   sizeColumns: [
     { id: 'length', key: 'length', label: '총장' },
@@ -157,7 +178,9 @@ const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 
     bgImage: null,
     results: [],
     resolution: '2K',
-    aspectRatio: '1:1'
+    aspectRatio: '1:1',
+    prompt: '',
+    selectedAngles: []
   },
   // Admin Keys Defaults
   apiKeys: [
@@ -209,7 +232,8 @@ const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 
   // mainImageUrl is null
   copyAnalysis: null,
   videoLogs: [],
-  activeVideoLogId: null
+  activeVideoLogId: null,
+  backgroundHistory: []
 };
 
 
@@ -438,7 +462,24 @@ export const useStore = create<AppStore>()(
       updateVideoLog: (id, updates) => set((state) => ({
         videoLogs: state.videoLogs.map(log => log.id === id ? { ...log, ...updates } : log)
       })),
-      setActiveVideoLogId: (id) => set({ activeVideoLogId: id })
+      setActiveVideoLogId: (id) => set({ activeVideoLogId: id }),
+
+      // Background History Actions
+      addToBackgroundHistory: (url) => set((state) => ({
+        backgroundHistory: [
+          { id: getMsgId(), url, timestamp: Date.now() },
+          ...state.backgroundHistory
+        ].slice(0, 10) // Keep last 10
+      })),
+      clearBackgroundHistory: () => set({ backgroundHistory: [] }),
+
+      // Saved Model Actions
+      addSavedModel: (model) => set((state) => ({ savedModels: [model, ...state.savedModels] })),
+      removeSavedModel: (id) => set((state) => ({ savedModels: state.savedModels.filter(m => m.id !== id) })),
+      updateSavedModel: (id, updates) => set((state) => ({
+        savedModels: state.savedModels.map(m => m.id === id ? { ...m, ...updates } : m)
+      })),
+      setActiveModelId: (id) => set({ activeModelId: id })
     }),
     {
       name: 'nanobanana-storage', // unique name
@@ -461,7 +502,9 @@ export const useStore = create<AppStore>()(
         mainImageUrl: state.mainImageUrl,
         techSketchUrl: state.techSketchUrl,
         brandAssets: state.brandAssets,
-        pageBlocks: state.pageBlocks // Persist blocks
+        pageBlocks: state.pageBlocks, // Persist blocks
+        savedModels: state.savedModels,
+        activeModelId: state.activeModelId
       }),
     }
   )

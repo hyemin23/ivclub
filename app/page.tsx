@@ -43,6 +43,10 @@ const VideoStudio = dynamic(() => import('@/components/VideoStudio').then(mod =>
   loading: () => <div className="p-12 text-center text-gray-500">Loading Video Studio...</div>,
   ssr: false
 });
+const ColorVariation = dynamic(() => import('@/components/ColorVariation').then(mod => mod.ColorVariation), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Color Studio...</div>,
+  ssr: false
+});
 
 // const AutoFitting = () => <div className="p-10 border border-dashed border-gray-700 rounded-xl text-center text-gray-400">AutoFitting Disabled</div>;
 // const UGCMaster = () => <div className="p-10 border border-dashed border-gray-700 rounded-xl text-center text-gray-400">UGCMaster Disabled</div>;
@@ -79,6 +83,13 @@ const Page: React.FC = () => {
           icon: <Users className="w-5 h-5" />,
           description: '배경/각도 일괄 생성',
           view: 'auto-fitting' as const
+        },
+        {
+          id: 'color-variation',
+          name: 'AI 컬러 변경',
+          icon: <Palette className="w-5 h-5" />,
+          description: '질감 보존 색상 변경',
+          view: 'color-variation' as const
         },
         {
           id: 'thumbnail-generator',
@@ -257,6 +268,7 @@ const Page: React.FC = () => {
                 {appView === 'factory' && '상페 AI 팩토리'}
                 {appView === 'fit-builder' && '스마트 빌더'}
                 {appView === 'auto-fitting' && '자동 피팅'}
+                {appView === 'color-variation' && 'AI PIGMENT STUDIO'}
                 {appView === 'thumbnail-generator' && '썸네일 & 코디 생성기'}
                 {appView === 'settings' && '시스템 설정'}
               </h2>
@@ -267,6 +279,7 @@ const Page: React.FC = () => {
                 {appView === 'auto-fitting' && '상품과 배경을 결합하여 다양한 각도의 피팅 이미지를 일괄 생성합니다.'}
                 {appView === 'thumbnail-generator' && '자사몰/오픈마켓 썸네일과 쇼핑 앱 전용 코디(전신) 이미지를 규격에 맞춰 생성합니다.'}
                 {appView === 'settings' && '시스템 구성 및 API 상태를 관리합니다.'}
+                {appView === 'color-variation' && '원단 질감과 조명을 완벽하게 보존하며 오직 색상만 변경합니다. (Texture Lock Engine)'}
               </p>
             </div>
 
@@ -298,6 +311,7 @@ const Page: React.FC = () => {
             {appView === 'admin' && <AdminKeyManager />}
             {appView === 'canvas-editor' && <CanvasEditor />}
             {appView === 'video-studio' && <VideoStudio />}
+            {appView === 'color-variation' && <ColorVariation />}
             {appView === 'settings' && (
               <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-bottom-4">
 

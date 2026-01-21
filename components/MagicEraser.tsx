@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Eraser, Sparkles, Undo, Download, Loader2, Brush } from 'lucide-react';
-import { generateMagicEraser } from '../services/geminiService';
+import { magicEraser } from '../services/imageService';
 
 const MagicEraser: React.FC = () => {
     const [image, setImage] = useState<string | null>(null);
@@ -125,7 +125,7 @@ const MagicEraser: React.FC = () => {
 
         try {
             setIsGenerating(true);
-            const generatedUrl = await generateMagicEraser(image, maskDataUrl);
+            const generatedUrl = await magicEraser(image, maskDataUrl);
             setResultImage(generatedUrl);
         } catch (e) {
             console.error(e);

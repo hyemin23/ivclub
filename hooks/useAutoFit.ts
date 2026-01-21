@@ -97,7 +97,6 @@ export const useAutoFit = () => {
         setProgress(0);
         setProgressText('작업 준비 중...');
 
-        const settings = getConcurrencySettings();
         abortControllerRef.current = new AbortController();
         const signal = abortControllerRef.current.signal;
 
@@ -124,52 +123,54 @@ export const useAutoFit = () => {
 
             if (signal.aborted) return;
 
-            const CONCURRENCY_LIMIT = settings.limit;
-            let completed = 0;
-            const total = newResults.length;
+            // 🚀 Full Parallel Processing with Hybrid Model
+            setProgressText(`⚡️ 5개 앵글 동시 생성 중... (병렬 처리)`);
+            console.log('🚀 Starting parallel generation for', newResults.length, 'angles');
 
-            const processItem = async (item: VariationResult) => {
+            const generatePromises = newResults.map(async (item) => {
                 if (signal.aborted) return;
-                await generateSingleAngle(item.id, item.angle, optimizedProduct, optimizedBg, prompt, signal);
-            };
 
-            const executePool = async () => {
-                const executing: Promise<void>[] = [];
-                for (const item of newResults) {
-                    if (signal.aborted) break;
+                // No-Downgrade Policy: All Pro Models
+                console.log(`📸 [${item.angle}] Generating with PRO model...`);
 
-                    setProgressText(`자동 피팅 생성 중... (${completed + 1}/${total})`);
-                    const p = processItem(item).finally(() => {
-                        if (!signal.aborted) {
-                            completed++;
-                            const percent = Math.round((completed / total) * 100);
-                            setProgress(percent);
-                            setProgressText(`생성 진행 중... ${percent}%`);
-                        }
-                    });
-
-                    const e = p.then(() => {
-                        executing.splice(executing.indexOf(e), 1);
-                    });
-                    executing.push(e);
-
-                    if (executing.length >= CONCURRENCY_LIMIT) {
-                        try {
-                            await Promise.race(executing);
-                        } catch (e) { /* ignore race errors */ }
+                try {
+                    const url = await generateAutoFitting(
+                        optimizedProduct,
+                        optimizedBg,
+                        prompt,
+                        item.angle,
+                        aspectRatio,
+                        resolution,
+                        isSideProfile,
+                        signal
+                    );
+                    if (!signal.aborted) {
+                        updateAutoFittingResult(item.id, { url, status: 'success' });
                     }
+                } catch (error: any) {
+                    if (signal.aborted || error.message === "작업이 취소되었습니다.") return;
+                    const parsed = parseGeminiError(error);
+                    updateAutoFittingResult(item.id, {
+                        status: 'error',
+                        errorType: parsed.type,
+                        errorMessage: parsed.message
+                    });
+                    toast.error(`생성 실패 (${item.angle}): ${parsed.message}`);
                 }
-                await Promise.all(executing);
-            };
+            });
 
-            await executePool();
+            // Wait for all to complete
+            await Promise.all(generatePromises);
+            console.log('✅ All angles completed');
+
         } catch (err) {
             console.error(err);
         } finally {
             if (!signal.aborted) {
                 setIsLoading(false);
-                setProgress(0);
-                setProgressText('');
+                setProgress(100);
+                setProgressText('완료!');
+                setTimeout(() => setProgressText(''), 2000);
                 abortControllerRef.current = null;
             }
         }
