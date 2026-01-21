@@ -31,15 +31,17 @@ const TOOL_CONFIG_NONE: ToolConfig = {
 export const GEMINI_MODELS = {
   HIGH_QUALITY: "gemini-3-pro-preview",
   IMAGE_GEN: "gemini-3-pro-image-preview",
-  EDIT_STABLE: "gemini-3-pro-image-preview", // 💡 Updated to Image Specialist
+  EDIT_STABLE: "gemini-2.0-flash-exp-image-generation", // 🛠️ Experimental Image Gen Model for Editing
 };
 
 // 🚨 [Corrected] Confirmed Active Models (Jan 2026)
 const MODEL_FALLBACK_LIST = [
-  "gemini-3-pro-image-preview", // 🏆 1st: Image Specialist (Nano Banana Pro)
-  "gemini-3-pro-preview",       // 🥈 2nd: General Logic Pro
-  "gemini-2.5-pro",             // 🥉 3rd: Stable Backup
-  "gemini-2.5-flash"            // ⚡️ 4th: Speed/Fallback
+  "gemini-3-pro-image-preview", // 🏆 1st: Nano Banana Pro
+  "gemini-2.0-flash-exp-image-generation", // 🥈 2nd: Experimental Image Gen
+  "gemini-2.5-flash-image",    // 🥉 3rd: Nano Banana (Flash)
+  "gemini-3-pro-preview",       // 4th: Logic Pro
+  "gemini-2.5-pro",             // 5th: Stable Backup
+  "gemini-2.5-flash"            // 6th: Speed/Fallback
 ];
 
 const FALLBACK_STRATEGIES = {
