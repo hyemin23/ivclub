@@ -1,5 +1,5 @@
 import { generateContentSafe, fileToPart, GEMINI_MODELS } from "./geminiClient";
-import { SavedModel, Resolution, AspectRatio } from "../types";
+import { SavedModel, Resolution, AspectRatio, BenchmarkAnalysisResult } from "../types";
 
 /**
  * 1️⃣ Background Change Service
@@ -281,8 +281,8 @@ export const generatePoseVariation = async (
     console.log("🎬 Generating Pose Variation with Background Lock...");
 
     const result = await generateContentSafe(variationPrompt, [fileToPart(currentResultImage)], {
-        taskType: 'CREATION',
-        model: GEMINI_MODELS.HIGH_QUALITY
+        taskType: 'EDIT',
+        model: GEMINI_MODELS.EDIT_STABLE
     });
 
     if (result.inlineData) return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
@@ -344,3 +344,123 @@ export const generateBackgroundVariations = async (
   return results;
 };
 
+
+// --- BENCHMARK (VIBE-COPY) SERVICE ---
+
+// --- BENCHMARK (VIBE-COPY) SERVICE ---
+
+/**
+ * 🔍 Analyze Reference Image for Vibe Extraction
+ * Uses Gemini Vision to reverse-engineer the lighting, environment, and style.
+ */
+export const analyzeBenchmarkImage = async (
+  referenceImage: string
+): Promise<BenchmarkAnalysisResult> => {
+  const prompt = `
+    Analyze this fashion thumbnail image for "Vibe Copy" purposes.
+    I need to recreate this exact aesthetic for another product.
+    
+    Extract the following visual attributes in JSON format:
+    
+    1. Lighting:
+       - Type: 'Natural' | 'Studio' | 'Flash' | 'Neon' | 'Mixed'
+       - Direction: e.g., "Side right", "Backlit", "Frontal Flash"
+       - Quality: e.g., "Hard shadows", "Soft diffused", "Cinematic"
+       
+    2. Environment:
+       - Location: Precise description (e.g., "Seoul Seongsu-dong cafe street", "Minimal white studio")
+       - Props: Any visible background elements (e.g., "Steel chair", "Plants", "Traffic cone"). If none, return empty array.
+       - Surface: Ground/Wall texture (e.g., "Cracked asphalt", "Plaster wall")
+       
+    3. Technical:
+       - Vibe Keywords: 3-5 adjectives (e.g., "Raw", "Gritty", "High-fashion", "Retro"). MUST be an array of strings.
+       - Color Grading: Describe the post-processing tone (e.g., "Desaturated cool glossy", "Warm vintage")
+       - Composition: Camera angle and framing (e.g., "Low angle", "Wide shot")
+
+    Return ONLY the JSON object. No markdown formatting.
+  `;
+
+  const result = await generateContentSafe(prompt, [fileToPart(referenceImage)], {
+    taskType: 'TEXT',
+    model: GEMINI_MODELS.HIGH_QUALITY, // Use Logic Pro for detailed analysis
+    config: { responseMimeType: "application/json" }
+  });
+
+  try {
+    const json = JSON.parse(result.text || '{}');
+    // Validation / Fallback
+    if (!json.vibe_keywords) json.vibe_keywords = ["Trendy", "Clean"];
+    if (!Array.isArray(json.vibe_keywords)) json.vibe_keywords = [json.vibe_keywords];
+    if (!json.lighting) json.lighting = { type: 'Studio', direction: 'Front', quality: 'Soft' };
+    if (!json.environment) json.environment = { location: 'Minimal Studio', props: [], surface: 'Smooth' };
+
+    return json as BenchmarkAnalysisResult;
+  } catch (e) {
+    console.error("Benchmark Analysis Parse Error:", e);
+    // Fallback object instead of throwing
+    return {
+        lighting: { type: 'Studio', direction: 'Front', quality: 'Soft' },
+        environment: { location: 'Modern Studio', props: [], surface: 'Clean' },
+        vibe_keywords: ['Simple', 'Clean'],
+        color_grading: 'Natural',
+        composition: 'Eye Level'
+    };
+  }
+};
+
+/**
+ * 🖌️ Apply Benchmark Style (Vibe Transfer)
+ * synthesizing the user's product into the analyzed "Vibe".
+ */
+export const applyBenchmarkStyle = async (
+  productImage: string,
+  analysis: BenchmarkAnalysisResult,
+  resolution: Resolution = '1K',
+  aspectRatio: AspectRatio = '1:1'
+): Promise<string> => {
+  
+  const keywords = Array.isArray(analysis.vibe_keywords) ? analysis.vibe_keywords.join(', ') : 'High Quality';
+  const loc = analysis.environment?.location || 'Studio';
+  const surface = analysis.environment?.surface || 'Clean floor';
+  const lightType = analysis.lighting?.type || 'Natural';
+  const lightDir = analysis.lighting?.direction || 'Soft';
+  const lightQual = analysis.lighting?.quality || 'Good';
+
+  // Construct a High-Fidelity Prompt based on Analysis
+  const vibePrompt = `
+    [NanoBanana PRO: VIBE TRANSFER MODE]
+    
+    **TASK**: Composite the input product image into a new background that PERFECTLY MATCHES the following "Vibe Reference".
+    
+    **TARGET AESTHETIC (STRICTLY FOLLOW):**
+    - **VIBE**: ${keywords}.
+    - **LOCATION**: ${loc}. Surface: ${surface}.
+    - **LIGHTING**: ${lightType}, ${lightDir} direction, ${lightQual}.
+    - **COLOR TONE**: ${analysis.color_grading || 'Natural'}.
+    - **COMPOSITION**: ${analysis.composition || 'Standard'}.
+    
+    **PRODUCT INTEGRATION:**
+    - Place the product naturally in this environment.
+    - **CRITICAL**: Apply the specific lighting (${lightType}) onto the product so it looks like it was photographed there.
+    - Cast realistic shadows consistent with the ${lightDir} light source.
+    - If "Flash" lighting is detected, add a slight hard flash falloff to the background.
+    
+    **QUALITY:**
+    - Photorealistic, 8K, Commercial Fashion Photography.
+    - Texture of the product must remain sharp (Texture Lock).
+  `;
+
+  const result = await generateContentSafe(vibePrompt, [fileToPart(productImage)], {
+    taskType: 'CREATION',
+    model: GEMINI_MODELS.IMAGE_GEN,
+    config: {
+      imageConfig: {
+        aspectRatio,
+        imageSize: resolution
+      }
+    }
+  });
+
+  if (result.inlineData) return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
+  throw new Error("No image generated by benchmark style.");
+};

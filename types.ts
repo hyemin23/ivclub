@@ -312,3 +312,23 @@ export interface DesignKeyword {
   x?: number;
   y?: number;
 }
+
+// ============================================
+// Benchmark (Vibe-Copy) Type
+// ============================================
+
+export interface BenchmarkAnalysisResult {
+  lighting: {
+    type: 'Natural' | 'Studio' | 'Flash' | 'Neon' | 'Mixed';
+    direction: string; 
+    quality: string;   
+  };
+  environment: {
+    location: string;
+    props: string[];
+    surface: string; 
+  };
+  vibe_keywords: string[]; 
+  color_grading: string;   
+  composition: string;     
+}

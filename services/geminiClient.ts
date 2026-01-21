@@ -51,8 +51,8 @@ const FALLBACK_STRATEGIES = {
   // Text/Analysis: Can start with Logic Pro
   TEXT: ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
 
-  // Image Creation: Explicitly use Image Specialist
-  CREATION: ["gemini-3-pro-image-preview"],
+  // Image Creation: Explicitly use Image Specialist + Fallbacks
+  CREATION: ["gemini-3-pro-image-preview", "gemini-2.0-flash-exp-image-generation", "gemini-2.5-flash-image"],
 };
 
 export interface GeminiResponse {
@@ -95,66 +95,79 @@ export async function generateContentSafe(
   let lastError: any = null;
 
   for (const modelName of modelList) {
-    try {
-      console.log(`🤖 Model Attempt: ${modelName} (${options.taskType})`);
+    // 🔁 Retry Loop for Transient Errors (503/429)
+    let retryCount = 0;
+    const maxRetries = 2; // Try same model up to 3 times total
 
-      const requestConfig = {
-        model: modelName,
-        contents: {
-          parts: [
-            { text: prompt },
-            ...parts
-          ]
-        },
-        config: {
-          safetySettings: SAFETY_SETTINGS_BLOCK_NONE,
-          toolConfig: TOOL_CONFIG_NONE,
-          ...(options.config || {})
-        }
-      };
+    while (retryCount <= maxRetries) {
+      try {
+        console.log(`🤖 Model Attempt: ${modelName} (${options.taskType}) ${retryCount > 0 ? `(Retry ${retryCount})` : ''}`);
 
-      // @ts-ignore
-      const result = await ai.models.generateContent(requestConfig);
-      
-      // Handle Image Response (inlineData)
-      const imagePart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-      if (imagePart?.inlineData?.data) {
-        console.log(`✅ Generation Success! (Used: ${modelName})`);
-        return {
-          inlineData: {
-            data: imagePart.inlineData.data,
-            mimeType: imagePart.inlineData.mimeType || 'image/png'
+        const requestConfig = {
+          model: modelName,
+          contents: {
+            parts: [
+              { text: prompt },
+              ...parts
+            ]
           },
-          usedModel: modelName
+          config: {
+            safetySettings: SAFETY_SETTINGS_BLOCK_NONE,
+            toolConfig: TOOL_CONFIG_NONE,
+            ...(options.config || {})
+          }
         };
-      }
 
-      // Handle Text Response
-      const textPart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.text);
-      if (textPart?.text) {
-        console.log(`✅ Generation Success! (Used: ${modelName})`);
-        return {
-          text: textPart.text,
-          usedModel: modelName
-        };
-      }
+        // @ts-ignore
+        const result = await ai.models.generateContent(requestConfig);
+        
+        // Handle Image Response (inlineData)
+        const imagePart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
+        if (imagePart?.inlineData?.data) {
+          console.log(`✅ Generation Success! (Used: ${modelName})`);
+          return {
+            inlineData: {
+              data: imagePart.inlineData.data,
+              mimeType: imagePart.inlineData.mimeType || 'image/png'
+            },
+            usedModel: modelName
+          };
+        }
 
-      throw new Error("Empty response from AI (No Text/Image)");
+        // Handle Text Response
+        const textPart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.text);
+        if (textPart?.text) {
+          console.log(`✅ Generation Success! (Used: ${modelName})`);
+          return {
+            text: textPart.text,
+            usedModel: modelName
+          };
+        }
 
-    } catch (error: any) {
-      console.warn(`⚠️ ${modelName} Failed. Reason:`, error.message);
-      lastError = error;
-      
-      const isTransient = error.message.includes('503') || error.message.includes('429') || error.message.includes('overloaded');
-      
-      if (isTransient) {
-        console.log("⏳ Transient error, waiting 1s...");
-        await new Promise(r => setTimeout(r, 1000));
-        // Note: For transient errors, we might want to retry SAME model, but for now we proceed to fallback
-        // To strictly follow user's loop, we proceed.
+        // If we get here, it's an empty response but NOT an error throw.
+        // We treat it as failure and try next model, no retry needed.
+        throw new Error("Empty response from AI (No Text/Image)");
+
+      } catch (error: any) {
+        console.warn(`⚠️ ${modelName} Failed. Reason:`, error.message);
+        lastError = error;
+        
+        const isTransient = error.message.includes('503') || error.message.includes('429') || error.message.includes('overloaded');
+        
+        if (isTransient) {
+          if (retryCount < maxRetries) {
+             console.log(`⏳ Server overloaded (503). Retrying ${modelName} in 2s...`);
+             await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
+             retryCount++;
+             continue; // Retry ONLY same model
+          } else {
+             console.log(`❌ ${modelName} overloaded after ${maxRetries} retries. Moving to next model...`);
+          }
+        }
+        
+        // If not transient (e.g. 400 Bad Request, 404), or max retries exceeded, break inner loop to try next model
+        break; 
       }
-      
-      // If 404 (Not Found), immediately try next model
     }
   }
 

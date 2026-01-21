@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Sparkles, Download, ImageIcon, RefreshCw, X, Monitor, Layers, Wallpaper, UserCircle, Share2, UserPlus, Trash2, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Sparkles, Download, ImageIcon, RefreshCw, X, Monitor, Layers, Wallpaper, UserCircle, Share2, UserPlus, Trash2, CheckCircle2, ArrowRight, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { replaceBackground, generateBackgroundVariations, generatePoseVariation } from '../services/imageService';
-import { Resolution, AspectRatio, FaceMode, Gender, SavedModel } from '../types';
+import { replaceBackground, generateBackgroundVariations, generatePoseVariation, applyBenchmarkStyle } from '../services/imageService';
+import { Resolution, AspectRatio, FaceMode, Gender, SavedModel, BenchmarkAnalysisResult } from '../types';
+import { BenchmarkUploader } from './BenchmarkUploader';
 import { ImageModal } from './ImageModal';
 import { ConfirmModal } from './ConfirmModal';
 import { useStore, BackgroundHistoryItem } from '../store';
@@ -14,6 +15,9 @@ import { useStore, BackgroundHistoryItem } from '../store';
 const BackgroundChange: React.FC = () => {
   const [baseImage, setBaseImage] = useState<string | null>(null);
   const [bgRefImage, setBgRefImage] = useState<string | null>(null);
+  
+  // Benchmark State
+  const [benchmarkAnalysis, setBenchmarkAnalysis] = useState<BenchmarkAnalysisResult | null>(null);
 
   const [prompt, setPrompt] = useState('');
   const [resolution, setResolution] = useState<Resolution>('2K');
@@ -99,7 +103,7 @@ const BackgroundChange: React.FC = () => {
 
 
   const [stylePreset, setStylePreset] = useState<'CUSTOM' | 'MZ_CAFE'>('CUSTOM');
-  const [activeTab, setActiveTab] = useState<'STUDIO' | 'HOTPLACE' | 'CUSTOM'>('STUDIO');
+  const [activeTab, setActiveTab] = useState<'STUDIO' | 'HOTPLACE' | 'CUSTOM' | 'BENCHMARK'>('STUDIO');
   const [isWideFit, setIsWideFit] = useState(false);
   const [category, setCategory] = useState<'TOP' | 'BOTTOM' | 'SET'>('SET');
   const [isStyleReference, setIsStyleReference] = useState(false);
@@ -269,6 +273,72 @@ const BackgroundChange: React.FC = () => {
     }
   };
 
+  // Benchmark Application Handler
+  const handleBenchmarkApply = async () => {
+    if (!baseImage || !benchmarkAnalysis) return;
+    setIsLoading(true);
+    
+    // Initialize placeholders
+    const placeholders: ResultItem[] = Array(imageCount).fill(null).map((_, i) => ({
+      id: `benchmark-${i}`, url: null, status: 'loading'
+    }));
+    setResultImages(placeholders);
+    setProgress(0);
+    setProgressText('벤치마킹 스타일 적용 중...');
+
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
+    try {
+        let completed = 0;
+        const promises = Array(imageCount).fill(null).map(async (_, index) => {
+            if (signal.aborted) return;
+            try {
+                if (index === 0) setProgressText(`Vibe Transfer 진행 중... (0/${imageCount})`);
+                
+                const url = await applyBenchmarkStyle(
+                    baseImage,
+                    benchmarkAnalysis,
+                    resolution,
+                    aspectRatio
+                );
+
+                if (!signal.aborted && url) {
+                    setResultImages(prev => prev.map((item, i) => 
+                        i === index ? { ...item, url, status: 'success' } : item
+                    ));
+                    addToBackgroundHistory(url);
+                }
+            } catch (err: any) {
+                console.error("Benchmark Failed:", err);
+                if (!signal.aborted) {
+                    setResultImages(prev => prev.map((item, i) => 
+                        i === index ? { ...item, status: 'error' } : item
+                    ));
+                }
+            } finally {
+                if (!signal.aborted) {
+                    completed++;
+                    setProgress(Math.round((completed / imageCount) * 100));
+                }
+            }
+        });
+
+        await Promise.all(promises);
+
+    } catch (error: any) {
+        console.error(error);
+        toast.error("벤치마킹 생성 중 오류가 발생했습니다.");
+    } finally {
+        if (!signal.aborted) {
+            setIsLoading(false);
+            setProgress(0);
+            setProgressText('');
+            abortControllerRef.current = null;
+        }
+    }
+  };
+
   const handleDownloadAll = async () => {
     for (let i = 0; i < resultImages.length; i++) {
       if (!resultImages[i].url) continue;
@@ -414,6 +484,16 @@ const BackgroundChange: React.FC = () => {
             >
               📂 내 이미지
             </button>
+            <button
+              onClick={() => setActiveTab('BENCHMARK')}
+              className={`flex-1 py-3 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${activeTab === 'BENCHMARK'
+                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                : 'text-indigo-400 hover:text-indigo-300'
+                }`}
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>벤치마킹</span>
+            </button>
           </div>
 
           {/* Tab Content */}
@@ -547,6 +627,25 @@ const BackgroundChange: React.FC = () => {
                     </div>
                   </label>
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'BENCHMARK' && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                 <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mb-4">
+                    <h4 className="text-xs font-black text-indigo-300 flex items-center gap-2 mb-1">
+                       <Zap className="w-4 h-4" /> High-CTR Vibe Copy
+                    </h4>
+                    <p className="text-[10px] text-indigo-200/60 leading-relaxed">
+                       경쟁사의 '잘 팔리는 썸네일'을 분석하고, 그 <b className="text-white">조명과 분위기</b>를 그대로 훔쳐옵니다.
+                    </p>
+                 </div>
+                 
+                 <BenchmarkUploader 
+                    onAnalysisComplete={setBenchmarkAnalysis} 
+                    onApplyStyle={handleBenchmarkApply}
+                    isGenerating={isLoading}
+                 />
               </div>
             )}
 

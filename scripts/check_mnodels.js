@@ -68,6 +68,7 @@ https.get(url, (res) => {
                 const modelId = model.name.replace('models/', '');
                 const canGenerate = model.supportedGenerationMethods.includes('generateContent');
                 const statusIcon = canGenerate ? '🟢' : '🔴';
+                 
 
                 console.log(`${statusIcon} ID: ${modelId}`);
                 console.log(`   - 버전: ${model.version}`);
