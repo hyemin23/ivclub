@@ -33,6 +33,7 @@ export interface PageBlock {
   dataId?: string; // Reference to store data item
   content?: any; // For inline data (e.g. NoticeBlock image)
   isVisible: boolean;
+  order: number;
 }
 
 export type GeminiErrorType = 'safety' | 'quota' | 'auth' | 'invalid' | 'unknown';
