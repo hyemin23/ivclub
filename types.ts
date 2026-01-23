@@ -6,7 +6,7 @@ export type ProductCategory = '상의' | '하의' | '아우터' | '셋업' | '�
 export type MaterialType = '코튼' | '데님' | '나일론' | '울' | '니트' | '기모' | '린넨' | '혼방';
 export type ViewMode = 'full' | 'top' | 'bottom';
 export type PageLength = '5' | '7' | '9' | 'auto';
-export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio' | 'color-variation';
+export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio' | 'color-variation' | 'batch-studio';
 export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change' | 'outfit-swap';
 
 export type FaceMode = 'ON' | 'OFF' | 'HEADLESS';
@@ -320,15 +320,52 @@ export interface DesignKeyword {
 export interface BenchmarkAnalysisResult {
   lighting: {
     type: 'Natural' | 'Studio' | 'Flash' | 'Neon' | 'Mixed';
-    direction: string; 
-    quality: string;   
+    direction: string;
+    quality: string;
   };
   environment: {
     location: string;
     props: string[];
-    surface: string; 
+    surface: string;
   };
-  vibe_keywords: string[]; 
-  color_grading: string;   
-  composition: string;     
+  vibe_keywords: string[];
+  color_grading: string;
+  composition: string;
 }
+
+// ============================================
+// Batch Studio (Lookbook Factory) Types
+// ============================================
+
+// SEATED, WAIST, HEM 제거됨 - 요청사항 반영
+export type BatchPose =
+  | 'FRONT_FULL' | 'SIDE_LEFT' | 'SIDE_RIGHT' | 'WALKING' | 'HAND_GESTURE'
+  | 'CROP_TEXTURE' | 'CROP_COLLAR' | 'CROP_POCKET';
+
+export interface BatchColorVariant {
+  id: string;
+  name: string; // e.g. "Black", "Melange Grey"
+  hex: string;  // e.g. "#000000"
+  baseImage?: string; // Optional: specific image for this color
+}
+
+export interface BatchMatrixItem {
+  id: string;
+  colorId: string;
+  pose: BatchPose;
+  status: 'pending' | 'generating' | 'success' | 'failed';
+  imageUrl?: string;
+  error?: string;
+  backgroundTheme?: string; // Store theme snapshot
+  resolution?: BatchResolution; // Store resolution snapshot
+}
+
+export interface BatchJobConfig {
+  colors: BatchColorVariant[];
+  poses: BatchPose[]; // usually all 10
+  safetyMode?: boolean; // Auto-crop face for competitor images
+  productCategory?: 'TOP' | 'BOTTOM' | 'ONEPIECE';
+}
+
+export type BatchProductCategory = 'TOP' | 'BOTTOM' | 'ONEPIECE';
+export type BatchResolution = '1K' | '2K' | '4K';

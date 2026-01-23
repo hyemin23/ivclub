@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Factory, UserRoundPen, Zap, Settings, User, Rocket, Smartphone, Users, Menu, X, LayoutGrid, PanelLeftClose, PanelLeftOpen, Lock, Palette, Video } from 'lucide-react';
+import { Factory, UserRoundPen, Zap, Settings, User, Rocket, Smartphone, Users, Menu, X, LayoutGrid, PanelLeftClose, PanelLeftOpen, Lock, Palette, Video, Layers } from 'lucide-react';
 import { useStore } from '@/store';
 import { SidebarGroup } from '@/components/SidebarGroup';
 import FloatingLogViewer from '@/components/FloatingLogViewer';
@@ -47,6 +47,10 @@ const ColorVariation = dynamic(() => import('@/components/ColorVariation').then(
   loading: () => <div className="p-12 text-center text-gray-500">Loading Color Studio...</div>,
   ssr: false
 });
+const BatchStudio = dynamic(() => import('@/components/Step2BatchStudio'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading Batch Studio...</div>,
+  ssr: false
+});
 
 // const AutoFitting = () => <div className="p-10 border border-dashed border-gray-700 rounded-xl text-center text-gray-400">AutoFitting Disabled</div>;
 // const UGCMaster = () => <div className="p-10 border border-dashed border-gray-700 rounded-xl text-center text-gray-400">UGCMaster Disabled</div>;
@@ -58,7 +62,7 @@ const Page: React.FC = () => {
     process.env.NODE_ENV === 'development' || !!process.env.NEXT_PUBLIC_GEMINI_API_KEY
   );
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // 기본값: 닫힘
   const { step, brandName, appView, setAppView } = useStore();
 
   if (!hasKey) {
@@ -104,6 +108,13 @@ const Page: React.FC = () => {
           icon: <Factory className="w-5 h-5" />,
           description: '대량 상페 자동 생성',
           view: 'factory' as const
+        },
+        {
+          id: 'batch-studio',
+          name: '대량 생성 스튜디오',
+          icon: <Layers className="w-5 h-5" />,
+          description: '20+ Lookbook Factory',
+          view: 'batch-studio' as const
         },
         {
           id: 'canvas-editor',
@@ -280,6 +291,7 @@ const Page: React.FC = () => {
                 {appView === 'thumbnail-generator' && '자사몰/오픈마켓 썸네일과 쇼핑 앱 전용 코디(전신) 이미지를 규격에 맞춰 생성합니다.'}
                 {appView === 'settings' && '시스템 구성 및 API 상태를 관리합니다.'}
                 {appView === 'color-variation' && '원단 질감과 조명을 완벽하게 보존하며 오직 색상만 변경합니다. (Texture Lock Engine)'}
+                {appView === 'batch-studio' && '단 한 장의 사진으로 20장 이상의 컬러/포즈 베리에이션 룩북을 일괄 생산합니다. (Matrix Engine)'}
               </p>
             </div>
 
@@ -311,7 +323,9 @@ const Page: React.FC = () => {
             {appView === 'admin' && <AdminKeyManager />}
             {appView === 'canvas-editor' && <CanvasEditor />}
             {appView === 'video-studio' && <VideoStudio />}
+
             {appView === 'color-variation' && <ColorVariation />}
+            {appView === 'batch-studio' && <BatchStudio />}
             {appView === 'settings' && (
               <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-bottom-4">
 

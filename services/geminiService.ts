@@ -1,5 +1,5 @@
 
-import { Type } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { generateContentSafe, fileToPart, GEMINI_MODELS } from "./geminiClient";
 import {
   changeColorVariant,
@@ -45,6 +45,23 @@ export interface GeminiErrorResponse {
 }
 
 // 🛡️ Safety & Config moved to geminiClient.ts
+
+const API_TIMEOUT_MS = 60000;
+
+const withTimeout = <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  let timeoutHandle: NodeJS.Timeout;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  return Promise.race([
+    promise.then(result => {
+      clearTimeout(timeoutHandle);
+      return result;
+    }),
+    timeoutPromise
+  ]);
+};
 
 const getApiKey = () => {
   const state = useStore.getState();
@@ -258,7 +275,7 @@ const imageUrlToBase64 = (url: string): Promise<string> => {
 // retryOperation removed (redundant with geminiClient)
 
 export const refinePrompt = async (data: { productFeatures: string, stylingCoordination: string, targetAudience: string }) => {
-    const prompt = `Refine these fashion details into professional, highly descriptive prompts for an AI image generator that specializes in hyper-realistic UGC content. 
+  const prompt = `Refine these fashion details into professional, highly descriptive prompts for an AI image generator that specializes in hyper-realistic UGC content. 
       Focus on fabric textures, specific lighting, and realistic model descriptions.
       Input:
       Product Features: ${data.productFeatures}
@@ -267,33 +284,33 @@ export const refinePrompt = async (data: { productFeatures: string, stylingCoord
       
       Return ONLY a JSON object with keys "productFeatures", "stylingCoordination", and "targetAudience".`;
 
-    const result = await generateContentSafe(prompt, [], {
-        taskType: 'TEXT',
-        model: GEMINI_MODELS.HIGH_QUALITY,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    productFeatures: { type: Type.STRING },
-                    stylingCoordination: { type: Type.STRING },
-                    targetAudience: { type: Type.STRING }
-                }
-            }
+  const result = await generateContentSafe(prompt, [], {
+    taskType: 'TEXT',
+    model: GEMINI_MODELS.HIGH_QUALITY,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          productFeatures: { type: Type.STRING },
+          stylingCoordination: { type: Type.STRING },
+          targetAudience: { type: Type.STRING }
         }
-    });
-
-    if (result.text) {
-        return JSON.parse(result.text);
+      }
     }
-    return {};
+  });
+
+  if (result.text) {
+    return JSON.parse(result.text);
+  }
+  return {};
 };
 
 export const generateFashionContent = async (config: GenerationConfig, locationPrompt: string): Promise<{ imageUrl: string, prompt: string }> => {
-    if (!config.imageFile) throw new Error("Image file is required.");
-    const base64Image = await fileToBase64(config.imageFile);
+  if (!config.imageFile) throw new Error("Image file is required.");
+  const base64Image = await fileToBase64(config.imageFile);
 
-    const finalPrompt = `
+  const finalPrompt = `
     ${TECHNICAL_INSTRUCTION}
     
     [FASHION_CONTEXT]
@@ -306,27 +323,27 @@ export const generateFashionContent = async (config: GenerationConfig, locationP
     ${locationPrompt}
     `;
 
-    console.log("🚀 Generating Fashion Content...");
+  console.log("🚀 Generating Fashion Content...");
 
-    const result = await generateContentSafe(finalPrompt, [fileToPart(base64Image, config.imageFile.type)], {
-      taskType: 'CREATION',
-      model: GEMINI_MODELS.IMAGE_GEN,
-      config: {
-        imageConfig: {
-          aspectRatio: '1:1',
-          imageSize: config.quality as Resolution
-        }
+  const result = await generateContentSafe(finalPrompt, [fileToPart(base64Image, config.imageFile.type)], {
+    taskType: 'CREATION',
+    model: GEMINI_MODELS.IMAGE_GEN,
+    config: {
+      imageConfig: {
+        aspectRatio: '1:1',
+        imageSize: config.quality as Resolution
       }
-    });
-
-    if (result.inlineData) {
-      return {
-        imageUrl: `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`,
-        prompt: finalPrompt
-      };
     }
-    
-    throw new Error("No image generated.");
+  });
+
+  if (result.inlineData) {
+    return {
+      imageUrl: `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`,
+      prompt: finalPrompt
+    };
+  }
+
+  throw new Error("No image generated.");
 };
 
 // --- Re-exports for Backward Compatibility ---
@@ -349,19 +366,19 @@ export const generateFittingVariation = async (
   cameraAngle: CameraAngle = 'default',
   signal?: AbortSignal
 ): Promise<string> => {
-    const parts: any[] = [{ inlineData: { data: baseImage.split(',')[1], mimeType: 'image/png' } }];
+  const parts: any[] = [{ inlineData: { data: baseImage.split(',')[1], mimeType: 'image/png' } }];
 
-    if (refImage) {
-      parts.push({ inlineData: { data: refImage.split(',')[1], mimeType: 'image/png' } });
-    }
+  if (refImage) {
+    parts.push({ inlineData: { data: refImage.split(',')[1], mimeType: 'image/png' } });
+  }
 
-    const framingPrompts: Record<ViewMode, string> = {
-      'full': 'Full body shot from head to toe.',
-      'top': 'Upper body shot, waist up focus.',
-      'bottom': 'Lower body shot, waist down focus.'
-    };
+  const framingPrompts: Record<ViewMode, string> = {
+    'full': 'Full body shot from head to toe.',
+    'top': 'Upper body shot, waist up focus.',
+    'bottom': 'Lower body shot, waist down focus.'
+  };
 
-    let masterPrompt = `[NanoBanana PRO MODE]
+  let masterPrompt = `[NanoBanana PRO MODE]
 
   Use the first uploaded image as the MAIN IMAGE.
   Use the second uploaded image as a POSE REFERENCE ONLY.
@@ -397,62 +414,62 @@ export const generateFittingVariation = async (
   - Correct camera angle as requested
   `;
 
-    const result = await generateContentSafe(masterPrompt, parts, {
-        taskType: 'CREATION',
-        model: GEMINI_MODELS.IMAGE_GEN,
-        config: {
-            imageConfig: {
-                aspectRatio: aspectRatio,
-                imageSize: resolution
-            }
-        }
-    });
-
-    if (result.inlineData) {
-        return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
+  const result = await generateContentSafe(masterPrompt, parts, {
+    taskType: 'CREATION',
+    model: GEMINI_MODELS.IMAGE_GEN,
+    config: {
+      imageConfig: {
+        aspectRatio: aspectRatio,
+        imageSize: resolution
+      }
     }
-    
-    throw new Error("No image generated.");
+  });
+
+  if (result.inlineData) {
+    return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
+  }
+
+  throw new Error("No image generated.");
 };
 
 
 export const analyzeProduct = async (image: string, userDescription: string): Promise<ProductAnalysis> => {
-    const prompt = `Analyze fashion product and return JSON: category, fit, materialType, season, keyPoints, and gender (Male or Female based on product design). IF UNISEX, default to Female.`;
-    
-    // Inline data handling via fileToPart not needed here as string is likely base64 data URI
-    // But generateContentSafe expects generic parts. 
-    // We can manually construct the inlineData part.
-    const imagePart = {
-        inlineData: {
-            data: image.split(',')[1],
-            mimeType: 'image/png'
-        }
-    };
+  const prompt = `Analyze fashion product and return JSON: category, fit, materialType, season, keyPoints, and gender (Male or Female based on product design). IF UNISEX, default to Female.`;
 
-    const result = await generateContentSafe(prompt, [imagePart], {
-        taskType: 'TEXT', // Text analysis from Image
-        model: GEMINI_MODELS.HIGH_QUALITY, // Vision capability needed
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    category: { type: Type.STRING },
-                    fit: { type: Type.STRING },
-                    material: { type: Type.STRING },
-                    materialType: { type: Type.STRING },
-                    season: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    gender: { type: Type.STRING, enum: ["Male", "Female"] }
-                }
-            }
-        }
-    });
-
-    if (result.text) {
-        return JSON.parse(result.text);
+  // Inline data handling via fileToPart not needed here as string is likely base64 data URI
+  // But generateContentSafe expects generic parts. 
+  // We can manually construct the inlineData part.
+  const imagePart = {
+    inlineData: {
+      data: image.split(',')[1],
+      mimeType: 'image/png'
     }
-    return {} as ProductAnalysis;
+  };
+
+  const result = await generateContentSafe(prompt, [imagePart], {
+    taskType: 'TEXT', // Text analysis from Image
+    model: GEMINI_MODELS.HIGH_QUALITY, // Vision capability needed
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          category: { type: Type.STRING },
+          fit: { type: Type.STRING },
+          material: { type: Type.STRING },
+          materialType: { type: Type.STRING },
+          season: { type: Type.ARRAY, items: { type: Type.STRING } },
+          keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+          gender: { type: Type.STRING, enum: ["Male", "Female"] }
+        }
+      }
+    }
+  });
+
+  if (result.text) {
+    return JSON.parse(result.text);
+  }
+  return {} as ProductAnalysis;
 };
 
 export const generatePoseChange = async (baseImage: string, refImage: string | null, prompt: string, resolution: Resolution, aspectRatio: AspectRatio, faceOptions?: any, cameraAngle: CameraAngle = 'default', signal?: AbortSignal): Promise<string> => {
@@ -573,16 +590,16 @@ Output:
     taskType: 'CREATION',
     model: GEMINI_MODELS.IMAGE_GEN,
     config: {
-        imageConfig: { aspectRatio, imageSize: resolution }
+      imageConfig: { aspectRatio, imageSize: resolution }
     }
   });
 
   if (result.inlineData) {
-      // @ts-ignore
-      useStore.getState().addLog(`Pose Change Generated Successfully`, 'success');
-      return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
+    // @ts-ignore
+    useStore.getState().addLog(`Pose Change Generated Successfully`, 'success');
+    return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
   }
-  
+
   throw new Error("No image generated.");
 };
 
@@ -686,31 +703,31 @@ const analyzeStyleReference = async (imageUrl: string): Promise<string> => {
 
 // Migrated to geminiClient
 export const generateTechSketch = async (category: string, name: string): Promise<string> => {
-    const response = await generateContentSafe(
-      `Technical flat sketch of a ${category} named ${name}, minimalist white background, black lines.`,
-      [],
-      {
-        taskType: 'CREATION',
-        model: GEMINI_MODELS.IMAGE_GEN,
-        config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
-      }
-    );
-    if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
-    throw new Error("No sketch generated.");
+  const response = await generateContentSafe(
+    `Technical flat sketch of a ${category} named ${name}, minimalist white background, black lines.`,
+    [],
+    {
+      taskType: 'CREATION',
+      model: GEMINI_MODELS.IMAGE_GEN,
+      config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
+    }
+  );
+  if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  throw new Error("No sketch generated.");
 };
 
 export const generateFactoryPose = async (baseImage: string, pose: any, analysis: any, resolution: any): Promise<string> => {
-    const response = await generateContentSafe(
-      `Model wearing the product.Pose: ${pose.prompt}.Target: ${analysis.category}. Model Gender: ${analysis.gender || 'Female'} `,
-      [fileToPart(baseImage)],
-      {
-        taskType: 'CREATION',
-        model: GEMINI_MODELS.IMAGE_GEN,
-        config: { imageConfig: { aspectRatio: "9:16", imageSize: resolution } }
-      }
-    );
-    if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
-    throw new Error("No factory pose generated.");
+  const response = await generateContentSafe(
+    `Model wearing the product.Pose: ${pose.prompt}.Target: ${analysis.category}. Model Gender: ${analysis.gender || 'Female'} `,
+    [fileToPart(baseImage)],
+    {
+      taskType: 'CREATION',
+      model: GEMINI_MODELS.IMAGE_GEN,
+      config: { imageConfig: { aspectRatio: "9:16", imageSize: resolution } }
+    }
+  );
+  if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  throw new Error("No factory pose generated.");
 };
 
 export const planDetailSections = async (analysis: any, name: string): Promise<any[]> => {
@@ -720,47 +737,47 @@ export const planDetailSections = async (analysis: any, name: string): Promise<a
 // Removed duplicate implementations (Moved to imageService)
 // extractColorDescription, generateColorVarFromRef, generateBackgroundChange, etc handled by re-exports
 export const planDetailPage = async (product: ProductInfo, length: PageLength): Promise<DetailImageSegment[]> => {
-    const response = await generateContentSafe(
-      `Create a product detail page plan for ${product.name}.Length: ${length}.Return as JSON array: title, logicalSection, keyMessage, visualPrompt.`,
-      [],
-      {
-        taskType: 'TEXT',
-        model: GEMINI_MODELS.HIGH_QUALITY, // Use Logic Pro
-        config: { responseMimeType: "application/json" }
-      }
-    );
-    if (response.text) return JSON.parse(response.text);
-    return [];
+  const response = await generateContentSafe(
+    `Create a product detail page plan for ${product.name}.Length: ${length}.Return as JSON array: title, logicalSection, keyMessage, visualPrompt.`,
+    [],
+    {
+      taskType: 'TEXT',
+      model: GEMINI_MODELS.HIGH_QUALITY, // Use Logic Pro
+      config: { responseMimeType: "application/json" }
+    }
+  );
+  if (response.text) return JSON.parse(response.text);
+  return [];
 };
 
 export const generateSectionImage = async (segment: DetailImageSegment, baseImages: File[], resolution: Resolution): Promise<string> => {
-    const imageParts = await Promise.all(baseImages.map(async f => fileToPart(await fileToBase64(f), f.type)));
-    
-    const response = await generateContentSafe(
-      segment.visualPrompt,
-      imageParts,
-      {
-        taskType: 'CREATION',
-        model: GEMINI_MODELS.IMAGE_GEN,
-        config: { imageConfig: { aspectRatio: "9:16", imageSize: resolution } }
-      }
-    );
-    if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
-    throw new Error("No section image generated.");
+  const imageParts = await Promise.all(baseImages.map(async f => fileToPart(await fileToBase64(f), f.type)));
+
+  const response = await generateContentSafe(
+    segment.visualPrompt,
+    imageParts,
+    {
+      taskType: 'CREATION',
+      model: GEMINI_MODELS.IMAGE_GEN,
+      config: { imageConfig: { aspectRatio: "9:16", imageSize: resolution } }
+    }
+  );
+  if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  throw new Error("No section image generated.");
 };
 
 export const generateLookbookImage = async (base64: string, description: string, analysis: any, resolution: any): Promise<string> => {
-    const response = await generateContentSafe(
-      description,
-      [fileToPart(base64)],
-      {
-        taskType: 'CREATION',
-        model: GEMINI_MODELS.IMAGE_GEN,
-        config: { imageConfig: { aspectRatio: "9:16", imageSize: resolution } }
-      }
-    );
-    if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
-    throw new Error("No lookbook image generated.");
+  const response = await generateContentSafe(
+    description,
+    [fileToPart(base64)],
+    {
+      taskType: 'CREATION',
+      model: GEMINI_MODELS.IMAGE_GEN,
+      config: { imageConfig: { aspectRatio: "9:16", imageSize: resolution } }
+    }
+  );
+  if (response.inlineData) return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  throw new Error("No lookbook image generated.");
 };
 
 export const generateAutoFitting = async (
@@ -773,20 +790,22 @@ export const generateAutoFitting = async (
   isSideProfile: boolean = false,
   signal?: AbortSignal
 ): Promise<string> => {
-    
-    const parts: any[] = [fileToPart(baseImage)];
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
+  const model = GEMINI_MODELS.IMAGE_GEN;
 
-    if (bgImage) {
-      parts.push(fileToPart(bgImage));
-    }
+  const parts: any[] = [fileToPart(baseImage)];
 
-    const anglePromptData = anglePrompts[targetAngle] || anglePrompts['default'];
-    // Handle fallback if data is string (old) or object (new) - though we typed it as object.
-    const anglePositive = typeof anglePromptData === 'string' ? anglePromptData : anglePromptData.positive;
-    const angleNegative = typeof anglePromptData === 'string' ? '' : anglePromptData.negative;
-    let masterPrompt = '';
+  if (bgImage) {
+    parts.push(fileToPart(bgImage));
+  }
 
-    const sideProfilePrompt = isSideProfile ? `
+  const anglePromptData = anglePrompts[targetAngle] || anglePrompts['default'];
+  // Handle fallback if data is string (old) or object (new) - though we typed it as object.
+  const anglePositive = typeof anglePromptData === 'string' ? anglePromptData : anglePromptData.positive;
+  const angleNegative = typeof anglePromptData === 'string' ? '' : anglePromptData.negative;
+  let masterPrompt = '';
+
+  const sideProfilePrompt = isSideProfile ? `
   [NanoBanana PRO MODE: SIDE PROFILE FIX]
 
 ** POSE OVERRIDE:** 90 - degree Side Profile / Lateral View.
@@ -801,8 +820,8 @@ export const generateAutoFitting = async (
       front view, symmetrical pockets, zipper fly showing, navel, pelvic bone, twisted torso, forward facing legs.
 ` : '';
 
-    if (bgImage) {
-      masterPrompt = `[NanoBanana PRO MODE]
+  if (bgImage) {
+    masterPrompt = `[NanoBanana PRO MODE]
 
 Use the first uploaded image as the MAIN IMAGE(person source).
 Use the second uploaded image as the BACKGROUND REFERENCE.
@@ -844,10 +863,10 @@ IF the requested angle is DIFFERENT from the original:
   [NEGATIVE PROMPT]
 ${angleNegative}
   `;
-    } else {
-      const currentHeadlessPrompt = anglePrompts[targetAngle]?.positive || 'Original Angle';
+  } else {
+    const currentHeadlessPrompt = anglePrompts[targetAngle]?.positive || 'Original Angle';
 
-      masterPrompt = `[NanoBanana PRO MODE - ANGLE VIEW]
+    masterPrompt = `[NanoBanana PRO MODE - ANGLE VIEW]
     
     Use the first uploaded image as the MAIN IMAGE.
 
@@ -874,23 +893,23 @@ ${angleNegative}
 
     ${sideProfilePrompt}
   `;
-    }
+  }
 
-    parts.push({ text: masterPrompt });
+  parts.push({ text: masterPrompt });
 
-    // API call with timeout
-    const response = await withTimeout(
-      ai.models.generateContent({
-        model: model, // Use selected model
-        contents: { parts },
-        config: { imageConfig: { aspectRatio, imageSize: resolution } }
-      }),
-      API_TIMEOUT_MS
-    );
-    trackUsage(response, true);
-    const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  // API call with timeout
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: model, // Use selected model
+      contents: { parts },
+      config: { imageConfig: { aspectRatio, imageSize: resolution } }
+    }),
+    API_TIMEOUT_MS
+  );
+  trackUsage(response, true);
+  const part = response.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
 
-    return `data:image/png;base64,${part?.inlineData?.data}`;
+  return `data:image/png;base64,${part?.inlineData?.data}`;
 
 
 };
@@ -901,15 +920,15 @@ export const generateVirtualTryOn = async (
   category: 'top' | 'bottom' | 'outer',
   signal?: AbortSignal
 ): Promise<string> => {
-    
-    // Legacy: const ai = new GoogleGenAI({ apiKey: getApiKey() });
-    
-    const parts: any[] = [
-      { inlineData: { data: modelImage.split(',')[1], mimeType: 'image/png' } },
-      { inlineData: { data: garmentImage.split(',')[1], mimeType: 'image/png' } }
-    ];
 
-    const prompt = `
+  // Legacy: const ai = new GoogleGenAI({ apiKey: getApiKey() });
+
+  const parts: any[] = [
+    { inlineData: { data: modelImage.split(',')[1], mimeType: 'image/png' } },
+    { inlineData: { data: garmentImage.split(',')[1], mimeType: 'image/png' } }
+  ];
+
+  const prompt = `
   [VIRTUAL TRY - ON MODE]
     
     Image 1: Model(Target Person)
@@ -932,38 +951,38 @@ export const generateVirtualTryOn = async (
     - High fidelity to the Garment's texture and pattern.
     `;
 
-    // Replaced legacy call with generateContentSafe
-    const response = await generateContentSafe(prompt, parts, {
-        taskType: 'CREATION',
-        model: GEMINI_MODELS.IMAGE_GEN,
-        config: {
-            imageConfig: {
-                aspectRatio: '1:1',
-                imageSize: '1K'
-            }
-        }
-    });
-
-    if (response.inlineData) {
-        return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  // Replaced legacy call with generateContentSafe
+  const response = await generateContentSafe(prompt, parts, {
+    taskType: 'CREATION',
+    model: GEMINI_MODELS.IMAGE_GEN,
+    config: {
+      imageConfig: {
+        aspectRatio: '1:1',
+        imageSize: '1K'
+      }
     }
-    
-    throw new Error("Try-On generation failed (No data returned)");
+  });
+
+  if (response.inlineData) {
+    return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  }
+
+  throw new Error("Try-On generation failed (No data returned)");
 };
 export const generateMagicEraser = async (
   baseImage: string,
   maskImage: string
 ): Promise<string> => {
-    
-    // Legacy: const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
-    // Prepare contents: Image 1 (Base), Image 2 (Mask Overlay)
-    const parts: any[] = [
-      { inlineData: { data: baseImage.split(',')[1], mimeType: 'image/png' } },
-      { inlineData: { data: maskImage.split(',')[1], mimeType: 'image/png' } }
-    ];
+  // Legacy: const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
-    const prompt = `[MAGIC ERASER MODE]
+  // Prepare contents: Image 1 (Base), Image 2 (Mask Overlay)
+  const parts: any[] = [
+    { inlineData: { data: baseImage.split(',')[1], mimeType: 'image/png' } },
+    { inlineData: { data: maskImage.split(',')[1], mimeType: 'image/png' } }
+  ];
+
+  const prompt = `[MAGIC ERASER MODE]
   Image 1: Original Source Image
   Image 2: Mask Image(Red stroke indicates area to remove)
 
@@ -974,23 +993,23 @@ export const generateMagicEraser = async (
   - High quality, seamless blending.
   `;
 
-    // Replaced legacy call with generateContentSafe
-    const response = await generateContentSafe(prompt, parts, {
-        taskType: 'CREATION',
-        model: 'gemini-3-pro-image-preview',
-        config: {
-            imageConfig: {
-                aspectRatio: '1:1', // Assuming keep original aspect ratio logic isn't strictly enforced by "1:1" here but model config
-                imageSize: '2K'
-            }
-        }
-    });
-
-    if (response.inlineData) {
-        return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  // Replaced legacy call with generateContentSafe
+  const response = await generateContentSafe(prompt, parts, {
+    taskType: 'CREATION',
+    model: 'gemini-3-pro-image-preview',
+    config: {
+      imageConfig: {
+        aspectRatio: '1:1', // Assuming keep original aspect ratio logic isn't strictly enforced by "1:1" here but model config
+        imageSize: '2K'
+      }
     }
-    
-    throw new Error("Magic Eraser generation failed (No data returned)");
+  });
+
+  if (response.inlineData) {
+    return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  }
+
+  throw new Error("Magic Eraser generation failed (No data returned)");
 };
 
 export const extractSizeTableFromImage = async (imageFile: File): Promise<{ category: SizeCategory, sizes: SizeRecord[] }> => {
@@ -1282,16 +1301,16 @@ export const analyzeProductVision = async (
   productName: string,
   productDescription?: string
 ): Promise<VisionAnalysisResult> => {
-    // @ts-ignore
-    useStore.getState().addLog('Vision AI V2 분석 시작 (Design Overlay)', 'info');
+  // @ts-ignore
+  useStore.getState().addLog('Vision AI V2 분석 시작 (Design Overlay)', 'info');
 
-    if (imageInput.startsWith('blob:')) {
-      throw new Error("Blob URL detected. Please ensure image is uploaded to Storage or converted to Base64.");
-    }
+  if (imageInput.startsWith('blob:')) {
+    throw new Error("Blob URL detected. Please ensure image is uploaded to Storage or converted to Base64.");
+  }
 
-    const base64Data = await urlToBase64(imageInput);
+  const base64Data = await urlToBase64(imageInput);
 
-    const prompt = `
+  const prompt = `
       You are a professional fashion art director and merchandising expert.
       Analyze this fashion product image and provide detailed visual analysis for a high - end e - commerce detail page.
       
@@ -1315,19 +1334,19 @@ Description: ${productDescription || 'N/A'}
 x, y are percentages(0 - 100) of the image dimensions.
     `;
 
-    const response = await generateContentSafe(prompt, [{ inlineData: { data: base64Data.split(',')[1] || base64Data, mimeType: "image/jpeg" } }], {
-        taskType: 'TEXT',
-        model: "gemini-3-flash-preview", // Use Flash for speed
-        config: { responseMimeType: "application/json" }
-    });
+  const response = await generateContentSafe(prompt, [{ inlineData: { data: base64Data.split(',')[1] || base64Data, mimeType: "image/jpeg" } }], {
+    taskType: 'TEXT',
+    model: "gemini-3-flash-preview", // Use Flash for speed
+    config: { responseMimeType: "application/json" }
+  });
 
-    if (response.text) {
-        return {
-            status: 'success',
-            data: JSON.parse(response.text)
-        };
-    }
-    throw new Error("Vision Analysis failed to generate JSON.");
+  if (response.text) {
+    return {
+      status: 'success',
+      data: JSON.parse(response.text)
+    };
+  }
+  throw new Error("Vision Analysis failed to generate JSON.");
 };
 
 /**
@@ -1385,19 +1404,19 @@ export const generateProductUSPs = async (
   userInput: string,
   base64Image?: string
 ): Promise<USPBlock[]> => {
-    // @ts-ignore
-    useStore.getState().addLog('AI USP 분석 시작 (Feature Blocks)', 'info');
-    
-    // If user input is empty, using image analysis is better, but here we prioritize user input if exists
-    // If both empty, we might need a fallback or rely on image context if passed.
-    // The prompt handles "based on user's keywords (or image context)"
+  // @ts-ignore
+  useStore.getState().addLog('AI USP 분석 시작 (Feature Blocks)', 'info');
 
-    const imagePart = base64Image ? { inlineData: { data: base64Image.split(',')[1] || base64Image, mimeType: 'image/jpeg' } } : null;
+  // If user input is empty, using image analysis is better, but here we prioritize user input if exists
+  // If both empty, we might need a fallback or rely on image context if passed.
+  // The prompt handles "based on user's keywords (or image context)"
 
-    const parts: any[] = [];
-    if (imagePart) parts.push(imagePart);
+  const imagePart = base64Image ? { inlineData: { data: base64Image.split(',')[1] || base64Image, mimeType: 'image/jpeg' } } : null;
 
-    const systemPrompt = `
+  const parts: any[] = [];
+  if (imagePart) parts.push(imagePart);
+
+  const systemPrompt = `
     You are a Korean fashion merchandising expert. 
     Based on the users keywords (or image context if keywords are empty), generate 4 key selling points (USPs).
     
@@ -1422,14 +1441,14 @@ export const generateProductUSPs = async (
     (Select the most appropriate one)
     `;
 
-    const response = await generateContentSafe(systemPrompt, parts, {
-        taskType: 'TEXT',
-        model: "gemini-3-flash-preview",
-        config: { responseMimeType: "application/json" }
-    });
+  const response = await generateContentSafe(systemPrompt, parts, {
+    taskType: 'TEXT',
+    model: "gemini-3-flash-preview",
+    config: { responseMimeType: "application/json" }
+  });
 
-    if (response.text) return JSON.parse(response.text);
-    throw new Error("USP 데이터 분석 실패");
+  if (response.text) return JSON.parse(response.text);
+  throw new Error("USP 데이터 분석 실패");
 };
 
 
@@ -1437,16 +1456,16 @@ export const analyzeProductCopy = async (
   imageInput: string,
   userInput: string
 ): Promise<ProductCopyAnalysis> => {
-    // @ts-ignore
-    useStore.getState().addLog('AI Copywriting 분석 시작', 'info');
+  // @ts-ignore
+  useStore.getState().addLog('AI Copywriting 분석 시작', 'info');
 
-    if (imageInput.startsWith('blob:')) {
-      throw new Error('Blob URL detected.');
-    }
+  if (imageInput.startsWith('blob:')) {
+    throw new Error('Blob URL detected.');
+  }
 
-    const base64Data = await urlToBase64(imageInput);
+  const base64Data = await urlToBase64(imageInput);
 
-    const systemPrompt = `
+  const systemPrompt = `
 [ROLE]
 당신은 2030 남성 의류 브랜드 'Asterisk'의 전문 카피라이터이자 패션 MD입니다.
 사용자가 업로드한 의류 이미지를 시각적으로 분석하고, 사용자의 입력 정보를 결합하여 매력적인 상세페이지 문구를 작성하세요.
@@ -1490,43 +1509,43 @@ export const analyzeProductCopy = async (
 }
 `;
 
-    const response = await generateContentSafe(systemPrompt, [{ inlineData: { data: base64Data.split(',')[1] || base64Data, mimeType: 'image/png' } }], {
-        taskType: 'TEXT',
-        model: "gemini-3-flash-preview",
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    product_analysis: {
-                        type: Type.OBJECT,
-                        properties: {
-                            detected_color: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            fabric_guess: { type: Type.STRING },
-                            style_keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
-                        },
-                        required: ['detected_color', 'fabric_guess', 'style_keywords']
-                    },
-                    copy_options: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                type: { type: Type.STRING, enum: ['Emotional', 'Functional', 'Trend'] },
-                                title: { type: Type.STRING },
-                                description: { type: Type.STRING }
-                            },
-                            required: ['type', 'title', 'description']
-                        }
-                    }
-                },
-                required: ['product_analysis', 'copy_options']
+  const response = await generateContentSafe(systemPrompt, [{ inlineData: { data: base64Data.split(',')[1] || base64Data, mimeType: 'image/png' } }], {
+    taskType: 'TEXT',
+    model: "gemini-3-flash-preview",
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          product_analysis: {
+            type: Type.OBJECT,
+            properties: {
+              detected_color: { type: Type.ARRAY, items: { type: Type.STRING } },
+              fabric_guess: { type: Type.STRING },
+              style_keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ['detected_color', 'fabric_guess', 'style_keywords']
+          },
+          copy_options: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING, enum: ['Emotional', 'Functional', 'Trend'] },
+                title: { type: Type.STRING },
+                description: { type: Type.STRING }
+              },
+              required: ['type', 'title', 'description']
             }
-        }
-    });
+          }
+        },
+        required: ['product_analysis', 'copy_options']
+      }
+    }
+  });
 
-    if (response.text) return JSON.parse(response.text);
-    throw new Error("Copywriting Analysis failed.");
+  if (response.text) return JSON.parse(response.text);
+  throw new Error("Copywriting Analysis failed.");
 };
 
 /**
@@ -1543,26 +1562,26 @@ export const generateOutfitSwap = async (
   ratio: string = '1:1',
   quality: string = 'STANDARD'
 ): Promise<string> => {
-    // 1. Base Dimensions (Standard)
-    let baseWidth = 1024;
-    let baseHeight = 1024;
+  // 1. Base Dimensions (Standard)
+  let baseWidth = 1024;
+  let baseHeight = 1024;
 
-    switch (ratio) {
-        case '1:1': baseWidth = 1024; baseHeight = 1024; break;
-        case '3:4': baseWidth = 768; baseHeight = 1024; break;
-        case '9:16': baseWidth = 720; baseHeight = 1280; break;
-        case '4:3': baseWidth = 1024; baseHeight = 768; break;
-        case '16:9': baseWidth = 1280; baseHeight = 720; break;
-        default: baseWidth = 1024; baseHeight = 1024;
-    }
+  switch (ratio) {
+    case '1:1': baseWidth = 1024; baseHeight = 1024; break;
+    case '3:4': baseWidth = 768; baseHeight = 1024; break;
+    case '9:16': baseWidth = 720; baseHeight = 1280; break;
+    case '4:3': baseWidth = 1024; baseHeight = 768; break;
+    case '16:9': baseWidth = 1280; baseHeight = 720; break;
+    default: baseWidth = 1024; baseHeight = 1024;
+  }
 
-    if (quality === 'HIGH') {
-        baseWidth = Math.floor(baseWidth * 1.5);
-        baseHeight = Math.floor(baseHeight * 1.5);
-    }
-    const targetResolution = `${baseWidth}x${baseHeight}`;
+  if (quality === 'HIGH') {
+    baseWidth = Math.floor(baseWidth * 1.5);
+    baseHeight = Math.floor(baseHeight * 1.5);
+  }
+  const targetResolution = `${baseWidth}x${baseHeight}`;
 
-    const prompt = `[NanoBanana PRO MODE: PHOTOREALISTIC INTEGRATION]
+  const prompt = `[NanoBanana PRO MODE: PHOTOREALISTIC INTEGRATION]
 **TASK:** Replace the pants texture while PRESERVING original lighting.
 **INSTRUCTION:**
 1.  **TEXTURE SWAP:** Replace the material inside the mask with the [Reference Image]'s fabric.
@@ -1576,31 +1595,31 @@ export const generateOutfitSwap = async (
 **NEGATIVE PROMPT:**
 floating texture, flat lighting, sticker effect, unnatural brightness, glowing edges, mismatched shadows, cartoonish.`;
 
-    const base64Base = await imageUrlToBase64(baseImage);
-    const mimeTypeBase = base64Base.match(/data:([^;]+);/)?.[1] || "image/png";
+  const base64Base = await imageUrlToBase64(baseImage);
+  const mimeTypeBase = base64Base.match(/data:([^;]+);/)?.[1] || "image/png";
 
-    const base64Ref = await imageUrlToBase64(refImage);
-    const mimeTypeRef = base64Ref.match(/data:([^;]+);/)?.[1] || "image/png";
+  const base64Ref = await imageUrlToBase64(refImage);
+  const mimeTypeRef = base64Ref.match(/data:([^;]+);/)?.[1] || "image/png";
 
-    const base64Mask = await imageUrlToBase64(maskImage);
-    const mimeTypeMask = base64Mask.match(/data:([^;]+);/)?.[1] || "image/png";
+  const base64Mask = await imageUrlToBase64(maskImage);
+  const mimeTypeMask = base64Mask.match(/data:([^;]+);/)?.[1] || "image/png";
 
-    const response = await generateContentSafe(prompt, [
-        { inlineData: { mimeType: mimeTypeBase, data: base64Base.split(',')[1] } },
-        { inlineData: { mimeType: mimeTypeRef, data: base64Ref.split(',')[1] } },
-        { inlineData: { mimeType: mimeTypeMask, data: base64Mask.split(',')[1] } }
-    ], {
-        taskType: 'CREATION',
-        model: "gemini-3-pro-image-preview",
-        config: {
-            // @ts-ignore
-            imageConfig: { imageSize: targetResolution },
-            temperature: 0.4
-        }
-    });
-
-    if (response.inlineData) {
-        return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  const response = await generateContentSafe(prompt, [
+    { inlineData: { mimeType: mimeTypeBase, data: base64Base.split(',')[1] } },
+    { inlineData: { mimeType: mimeTypeRef, data: base64Ref.split(',')[1] } },
+    { inlineData: { mimeType: mimeTypeMask, data: base64Mask.split(',')[1] } }
+  ], {
+    taskType: 'CREATION',
+    model: "gemini-3-pro-image-preview",
+    config: {
+      // @ts-ignore
+      imageConfig: { imageSize: targetResolution },
+      temperature: 0.4
     }
-    throw new Error("이미지 생성에 실패했습니다. (AI가 요청을 처리하지 못했습니다.)");
+  });
+
+  if (response.inlineData) {
+    return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
+  }
+  throw new Error("이미지 생성에 실패했습니다. (AI가 요청을 처리하지 못했습니다.)");
 };

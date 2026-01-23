@@ -504,7 +504,8 @@ export const useStore = create<AppStore>()(
         brandAssets: state.brandAssets,
         pageBlocks: state.pageBlocks, // Persist blocks
         savedModels: state.savedModels,
-        activeModelId: state.activeModelId
+        activeModelId: state.activeModelId,
+        appView: state.appView // 🆕 마지막 선택한 카테고리 유지
       }),
     }
   )

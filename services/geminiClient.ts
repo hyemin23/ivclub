@@ -32,6 +32,7 @@ export const GEMINI_MODELS = {
   HIGH_QUALITY: "gemini-3-pro-preview",
   IMAGE_GEN: "gemini-3-pro-image-preview",
   EDIT_STABLE: "gemini-2.0-flash-exp-image-generation", // 🛠️ Experimental Image Gen Model for Editing
+  LOGIC_REASONING: "gemini-3-pro-preview", // 🧠 Use Pro for Logic/Audit
 };
 
 // 🚨 [Corrected] Confirmed Active Models (Jan 2026)
@@ -46,7 +47,7 @@ const MODEL_FALLBACK_LIST = [
 
 const FALLBACK_STRATEGIES = {
   // Image Editing: Must use Image Specialist first!
-  EDIT: MODEL_FALLBACK_LIST, 
+  EDIT: MODEL_FALLBACK_LIST,
 
   // Text/Analysis: Can start with Logic Pro
   TEXT: ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
@@ -70,23 +71,23 @@ export interface GeminiResponse {
 export async function generateContentSafe(
   prompt: string,
   parts: any[] = [],
-  options: { 
-    taskType?: 'CREATION' | 'EDIT' | 'TEXT', 
+  options: {
+    taskType?: 'CREATION' | 'EDIT' | 'TEXT',
     model?: string, // Override model
-    config?: any 
+    config?: any
   } = { taskType: 'TEXT' }
 ): Promise<GeminiResponse> {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error("API Key missing");
 
   const ai = new GoogleGenAI({ apiKey });
-  
+
   // Determine Model List
   let modelList = FALLBACK_STRATEGIES[options.taskType || 'TEXT'];
-  
+
   // If specific model requested, try it first
   if (options.model) {
-     modelList = [options.model, ...modelList.filter(m => m !== options.model)];
+    modelList = [options.model, ...modelList.filter(m => m !== options.model)];
   }
 
   // Deduplicate
@@ -120,7 +121,7 @@ export async function generateContentSafe(
 
         // @ts-ignore
         const result = await ai.models.generateContent(requestConfig);
-        
+
         // Handle Image Response (inlineData)
         const imagePart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
         if (imagePart?.inlineData?.data) {
@@ -151,22 +152,22 @@ export async function generateContentSafe(
       } catch (error: any) {
         console.warn(`⚠️ ${modelName} Failed. Reason:`, error.message);
         lastError = error;
-        
+
         const isTransient = error.message.includes('503') || error.message.includes('429') || error.message.includes('overloaded');
-        
+
         if (isTransient) {
           if (retryCount < maxRetries) {
-             console.log(`⏳ Server overloaded (503). Retrying ${modelName} in 2s...`);
-             await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
-             retryCount++;
-             continue; // Retry ONLY same model
+            console.log(`⏳ Server overloaded (503). Retrying ${modelName} in 1s...`);
+            await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry (reduced from 2s)
+            retryCount++;
+            continue; // Retry ONLY same model
           } else {
-             console.log(`❌ ${modelName} overloaded after ${maxRetries} retries. Moving to next model...`);
+            console.log(`❌ ${modelName} overloaded after ${maxRetries} retries. Moving to next model...`);
           }
         }
-        
+
         // If not transient (e.g. 400 Bad Request, 404), or max retries exceeded, break inner loop to try next model
-        break; 
+        break;
       }
     }
   }
@@ -176,8 +177,8 @@ export async function generateContentSafe(
 
 // 📂 Helper: Base64 File to Part
 export const fileToPart = (base64: string, mimeType: string = 'image/png') => ({
-  inlineData: { 
-    data: base64.includes(',') ? base64.split(',')[1] : base64, 
-    mimeType 
+  inlineData: {
+    data: base64.includes(',') ? base64.split(',')[1] : base64,
+    mimeType
   }
 });

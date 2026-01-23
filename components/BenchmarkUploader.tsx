@@ -60,16 +60,15 @@ export const BenchmarkUploader: React.FC<BenchmarkUploaderProps> = ({
           </label>
           <div
             onClick={() => document.getElementById('benchmark-upload')?.click()}
-            className={`relative aspect-square rounded-[2rem] border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center ${
-              refImage 
-                ? 'border-indigo-500/50 bg-indigo-500/5' 
+            className={`relative aspect-square rounded-[2rem] border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center ${refImage
+                ? 'border-indigo-500/50 bg-indigo-500/5'
                 : 'border-white/10 hover:border-white/30 bg-black'
-            }`}
+              }`}
           >
             {refImage ? (
               <>
                 <img src={refImage} className="w-full h-full object-contain p-2" />
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); setRefImage(null); setAnalysis(null); }}
                   className="absolute top-3 right-3 p-1.5 bg-black/80 rounded-full hover:bg-red-500 transition-colors"
                 >
@@ -83,12 +82,12 @@ export const BenchmarkUploader: React.FC<BenchmarkUploaderProps> = ({
                 <span className="text-[9px] text-gray-500 mt-1 block">경쟁사 썸네일 / 인스타그램 사진</span>
               </div>
             )}
-            <input 
-              id="benchmark-upload" 
-              type="file" 
-              className="hidden" 
-              accept="image/*" 
-              onChange={handleImageUpload} 
+            <input
+              id="benchmark-upload"
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={handleImageUpload}
             />
           </div>
         </div>
@@ -100,13 +99,13 @@ export const BenchmarkUploader: React.FC<BenchmarkUploaderProps> = ({
               {isAnalyzing ? (
                 <>
                   <Sparkles className="w-10 h-10 text-indigo-400 animate-spin-slow mb-4" />
-                  <p className="text-xs font-bold animate-pulse">Analyzing Vibe...</p>
+                  <p className="text-xs font-bold animate-pulse">분위기 분석 중...</p>
                   <p className="text-[10px] text-gray-500 mt-1">조명, 구도, 분위기 추출 중</p>
                 </>
               ) : (
                 <>
                   <Zap className="w-10 h-10 text-gray-600 mb-4" />
-                  <p className="text-xs font-bold text-gray-500">No Vibe Detected</p>
+                  <p className="text-xs font-bold text-gray-500">분위기 데이터 없음</p>
                   <p className="text-[9px] text-gray-600 mt-1 max-w-[150px]">
                     이미지를 업로드하고 분석을 시작하세요.
                   </p>
@@ -117,35 +116,35 @@ export const BenchmarkUploader: React.FC<BenchmarkUploaderProps> = ({
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle2 className="w-4 h-4 text-green-400" />
-                <span className="text-xs font-black text-white uppercase tracking-wider">Vibe Extracted</span>
+                <span className="text-xs font-black text-white uppercase tracking-wider">분위기 추출 완료</span>
               </div>
-              
+
               {/* Lighting */}
               <div className="space-y-1">
-                <label className="text-[9px] text-gray-500 font-bold uppercase">Lighting</label>
+                <label className="text-[9px] text-gray-500 font-bold uppercase">조명 (Lighting)</label>
                 <div className="flex flex-wrap gap-1">
                   <span className="px-2 py-1 rounded-md bg-yellow-500/20 border border-yellow-500/30 text-[10px] text-yellow-200 font-medium">
-                    {analysis.lighting?.type || 'Unknown'}
+                    {analysis.lighting?.type || '알 수 없음'}
                   </span>
                   <span className="px-2 py-1 rounded-md bg-white/10 border border-white/10 text-[10px] text-gray-300">
-                    {analysis.lighting?.direction || 'General'}
+                    {analysis.lighting?.direction || '일반'}
                   </span>
                 </div>
               </div>
 
               {/* Environment */}
               <div className="space-y-1">
-                <label className="text-[9px] text-gray-500 font-bold uppercase">Location</label>
+                <label className="text-[9px] text-gray-500 font-bold uppercase">장소 (Location)</label>
                 <div className="p-2 bg-black/30 rounded-lg border border-white/5">
                   <p className="text-[10px] text-indigo-200 line-clamp-2 leading-relaxed">
-                    "{analysis.environment?.location || 'Unspecified Location'}"
+                    "{analysis.environment?.location || '장소 정보 없음'}"
                   </p>
                 </div>
               </div>
 
-               {/* Keywords */}
-               <div className="space-y-1">
-                <label className="text-[9px] text-gray-500 font-bold uppercase">Keywords</label>
+              {/* Keywords */}
+              <div className="space-y-1">
+                <label className="text-[9px] text-gray-500 font-bold uppercase">키워드 (Keywords)</label>
                 <div className="flex flex-wrap gap-1.5">
                   {(analysis.vibe_keywords || []).slice(0, 4).map((kw, i) => (
                     <span key={i} className="text-[9px] text-gray-400 border-b border-gray-700 pb-0.5">#{kw}</span>
@@ -163,7 +162,7 @@ export const BenchmarkUploader: React.FC<BenchmarkUploaderProps> = ({
                 className="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full font-bold text-xs shadow-xl shadow-indigo-500/30 transition-all flex items-center gap-2 transform hover:scale-105"
               >
                 <Sparkles className="w-4 h-4" />
-                Analyze Vibe
+                분위기 분석하기
               </button>
             </div>
           )}
@@ -180,12 +179,12 @@ export const BenchmarkUploader: React.FC<BenchmarkUploaderProps> = ({
           {isGenerating ? (
             <>
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Applying Vibe...</span>
+              <span>스타일 적용 중...</span>
             </>
           ) : (
             <>
               <Sparkles className="w-5 h-5" />
-              <span>Apply Vibe to My Product</span>
+              <span>내 상품에 스타일 적용하기</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </>
           )}
