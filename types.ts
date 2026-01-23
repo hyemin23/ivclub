@@ -25,7 +25,7 @@ export interface SavedModel {
   createdAt: number;
 }
 
-export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT' | 'DESIGN' | 'TYPOGRAPHY';
+export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT' | 'DESIGN' | 'TYPOGRAPHY' | 'PIN' | 'VS' | 'ZOOM';
 
 export interface PageBlock {
   id: string;
