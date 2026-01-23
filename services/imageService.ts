@@ -9,10 +9,11 @@ export const replaceBackground = async (
   baseImage: string,
   bgRefImage: string | null,
   userPrompt: string,
-  options?: { 
-    faceOptions?: any, 
-    ambientMatch?: boolean, 
-    modelPersona?: SavedModel, 
+  options?: {
+    faceOptions?: any,
+    ambientMatch?: boolean,
+    ambientStrength?: number,
+    modelPersona?: SavedModel,
     styleReference?: boolean,
     resolution?: Resolution,
     aspectRatio?: AspectRatio
@@ -28,9 +29,9 @@ export const replaceBackground = async (
       // Logic for style reference extraction could go here, but for now we push ref image if needed
       // Actually per previous logic, if styleRef, we might handle differently.
       // But assuming simpler Custom BG for now:
-       parts.push(fileToPart(bgRefImage));
+      parts.push(fileToPart(bgRefImage));
     } else {
-       parts.push(fileToPart(bgRefImage));
+      parts.push(fileToPart(bgRefImage));
     }
   }
 
@@ -49,9 +50,15 @@ export const replaceBackground = async (
     }
   }
 
+  // [AMBIENT MATCH]
+  if (options?.ambientMatch) {
+    const strength = options.ambientStrength || 50;
+    finalPrompt += `\n\n**LIGHTING INSTRUCTION:** Harmonize the subject's lighting and color tone with the background. Ambient Match Strength: ${strength}%. Ensure realistic shadow integration.`;
+  }
+
   // [PRESETS]
   if (preset === 'BASIC_STUDIO') {
-      finalPrompt = `
+    finalPrompt = `
 Create a high-conversion lower-body fashion thumbnail optimized for e-commerce.
 
 Focus on the pants only:
@@ -73,11 +80,11 @@ Composition:
 - Pants occupy 75–80% of the frame
 - Clean commercial thumbnail style suitable for product listing
       `;
-      if (options?.faceOptions?.isWideFit) {
-        finalPrompt += `\nIMPORTANT OVERRIDE:\n- Ensure wide silhouette is fully visible without cropping the outer leg lines.\n- Avoid perspective distortion. Keep the leg lines straight and wide.`;
-      }
+    if (options?.faceOptions?.isWideFit) {
+      finalPrompt += `\nIMPORTANT OVERRIDE:\n- Ensure wide silhouette is fully visible without cropping the outer leg lines.\n- Avoid perspective distortion. Keep the leg lines straight and wide.`;
+    }
   } else if (preset === 'MZ_CAFE') {
-      finalPrompt = `
+    finalPrompt = `
 [NanoBanana PRO MODE: K-MODERN CLEAN STREET]
 
 **TASK:** Composite the subject into a clean, modern, and quiet Korean street background.
@@ -104,14 +111,14 @@ Composition:
   }
 
   // 2. Call API (Using Creation Strategy)
-  const result = await generateContentSafe(finalPrompt, parts, { 
+  const result = await generateContentSafe(finalPrompt, parts, {
     taskType: 'CREATION',
     model: GEMINI_MODELS.IMAGE_GEN, // gemini-3-pro-image-preview
     config: {
-        imageConfig: {
-            aspectRatio: options?.aspectRatio || '1:1',
-            imageSize: options?.resolution || '1K'
-        }
+      imageConfig: {
+        aspectRatio: options?.aspectRatio || '1:1',
+        imageSize: options?.resolution || '1K'
+      }
     }
   });
 
@@ -137,13 +144,13 @@ export const changeColorVariant = async (
       Example Output: "Deep indigo blue with a slight faded denim texture", "Matte olive green", "Metallic silver".
       Keep it concise (under 10 words).
   `;
-  
+
   console.log("🎨 Extracting Color Description...");
   const analysisResult = await generateContentSafe(descriptionPrompt, [fileToPart(referenceColorImage)], {
     taskType: 'TEXT',
-    model: GEMINI_MODELS.HIGH_QUALITY 
+    model: GEMINI_MODELS.HIGH_QUALITY
   });
-  
+
   const targetColorDesc = analysisResult.text;
   if (!targetColorDesc) throw new Error("Failed to extract color description.");
   console.log(`🎨 Extracted: "${targetColorDesc}"`);
@@ -166,13 +173,13 @@ export const changeColorVariant = async (
 
   const editParts = [fileToPart(sourceProductImage)];
   if (maskImage && maskImage.length > 100) {
-      editParts.push(fileToPart(maskImage));
+    editParts.push(fileToPart(maskImage));
   }
 
   console.log("🖌️ Applying Editor with 1.5 Pro...");
   const editResult = await generateContentSafe(applyPrompt, editParts, {
-      taskType: 'EDIT',
-      model: GEMINI_MODELS.EDIT_STABLE // 1.5 Pro
+    taskType: 'EDIT',
+    model: GEMINI_MODELS.EDIT_STABLE // 1.5 Pro
   });
 
   if (editResult.inlineData) return `data:${editResult.inlineData.mimeType};base64,${editResult.inlineData.data}`;
@@ -212,11 +219,11 @@ export const magicEraser = async (
   }
 
   const result = await generateContentSafe(finalPrompt, [
-      fileToPart(originalImage),
-      fileToPart(maskImage)
+    fileToPart(originalImage),
+    fileToPart(maskImage)
   ], {
-      taskType: 'EDIT',
-      model: GEMINI_MODELS.EDIT_STABLE
+    taskType: 'EDIT',
+    model: GEMINI_MODELS.EDIT_STABLE
   });
 
   if (result.inlineData) return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
@@ -265,7 +272,7 @@ export const generatePoseVariation = async (
   currentResultImage: string,
   promptModifier: string = "Shift weight slightly, looking casually to the side."
 ): Promise<string> => {
-    const variationPrompt = `
+  const variationPrompt = `
       TASK: Generate a photorealistic variation of the provided input image.
       
       CRITICAL CONSTRAINTS (DO NOT CHANGE):
@@ -278,15 +285,15 @@ export const generatePoseVariation = async (
       3. **COMPOSITION:** A very slight shift in camera angle or perspective is allowed to enhance realism, as long as the location is clearly the same.
     `;
 
-    console.log("🎬 Generating Pose Variation with Background Lock...");
+  console.log("🎬 Generating Pose Variation with Background Lock...");
 
-    const result = await generateContentSafe(variationPrompt, [fileToPart(currentResultImage)], {
-        taskType: 'EDIT',
-        model: GEMINI_MODELS.EDIT_STABLE
-    });
+  const result = await generateContentSafe(variationPrompt, [fileToPart(currentResultImage)], {
+    taskType: 'EDIT',
+    model: GEMINI_MODELS.EDIT_STABLE
+  });
 
-    if (result.inlineData) return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
-    throw new Error("No image data returned from AI (Pose Variation).");
+  if (result.inlineData) return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;
+  throw new Error("No image data returned from AI (Pose Variation).");
 };
 
 export const generateBackgroundVariations = async (
@@ -299,24 +306,26 @@ export const generateBackgroundVariations = async (
   onStatusUpdate?: (message: string) => void,
   options?: any
 ): Promise<{ index: number; url: string | null; error?: string }[]> => {
-  
+
   const variations = BACKGROUND_THEME_VARIATIONS[themeKey] || [];
-  
+
   // Helper for single generation
   const generateSingleVariation = async (prompt: string, index: number) => {
-      try {
-          const resultUrl = await replaceBackground(baseImage, null, prompt, {
-              resolution,
-              aspectRatio,
-              faceOptions: { ...faceOptions, preset: themeKey }, // Pass preset context if needed
-              modelPersona: options?.modelPersona,
-              styleReference: options?.styleReference
-          });
-          return { index, url: resultUrl };
-      } catch (err: any) {
-          console.error(`Variation ${index} failed:`, err);
-          return { index, url: null, error: err.message };
-      }
+    try {
+      const resultUrl = await replaceBackground(baseImage, null, prompt, {
+        resolution,
+        aspectRatio,
+        faceOptions: { ...faceOptions, preset: themeKey }, // Pass preset context if needed
+        modelPersona: options?.modelPersona,
+        styleReference: options?.styleReference,
+        ambientMatch: options?.ambientMatch,
+        ambientStrength: options?.ambientStrength
+      });
+      return { index, url: resultUrl };
+    } catch (err: any) {
+      console.error(`Variation ${index} failed:`, err);
+      return { index, url: null, error: err.message };
+    }
   };
 
   // Chunking Logic
@@ -399,11 +408,11 @@ export const analyzeBenchmarkImage = async (
     console.error("Benchmark Analysis Parse Error:", e);
     // Fallback object instead of throwing
     return {
-        lighting: { type: 'Studio', direction: 'Front', quality: 'Soft' },
-        environment: { location: 'Modern Studio', props: [], surface: 'Clean' },
-        vibe_keywords: ['Simple', 'Clean'],
-        color_grading: 'Natural',
-        composition: 'Eye Level'
+      lighting: { type: 'Studio', direction: 'Front', quality: 'Soft' },
+      environment: { location: 'Modern Studio', props: [], surface: 'Clean' },
+      vibe_keywords: ['Simple', 'Clean'],
+      color_grading: 'Natural',
+      composition: 'Eye Level'
     };
   }
 };
@@ -418,7 +427,7 @@ export const applyBenchmarkStyle = async (
   resolution: Resolution = '1K',
   aspectRatio: AspectRatio = '1:1'
 ): Promise<string> => {
-  
+
   const keywords = Array.isArray(analysis.vibe_keywords) ? analysis.vibe_keywords.join(', ') : 'High Quality';
   const loc = analysis.environment?.location || 'Studio';
   const surface = analysis.environment?.surface || 'Clean floor';
