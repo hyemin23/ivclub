@@ -107,6 +107,7 @@ const EditorCanvas: React.FC = () => {
                     <DesignBlock
                         imageUrl={mainImageUrl || ''}
                         keywords={block.data?.keywords || designKeywords} // Use block data if saved, else current store
+                        isEditable={isSelected}
                         onUpdate={(updates) => updatePageBlock(block.id, { data: { ...block.data, ...updates } })}
                     />
                 );
