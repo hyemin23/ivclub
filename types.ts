@@ -32,6 +32,7 @@ export interface PageBlock {
   type: BlockType;
   dataId?: string; // Reference to store data item
   content?: any; // For inline data (e.g. NoticeBlock image)
+  data?: any; // For generic block data
   isVisible: boolean;
   order: number;
 }
