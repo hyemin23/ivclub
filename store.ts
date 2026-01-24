@@ -29,7 +29,7 @@ const storage: StateStorage = {
     await del(name);
   },
 };
-import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult, PageBlock, BlockType, DesignKeyword, VsComparisonItem, ProductCopyAnalysis, SavedModel } from './types';
+import { ProductState, LookbookImage, ProductAnalysis, SizeRecord, SizeColumn, DetailSection, Resolution, BrandAsset, AppView, SizeCategory, AutoFittingState, VariationResult, PageBlock, BlockType, DesignKeyword, VsComparisonItem, ProductCopyAnalysis, SavedModel, SmartPin } from './types';
 import { VideoGenerationLog, VideoStatus } from './types/video';
 
 export interface LogEntry {
@@ -124,6 +124,9 @@ interface AppStore extends ProductState {
   setProductNameInput: (name: string) => void;
   setMainImageUrl: (url: string | null) => void;
 
+  smartPins: SmartPin[];
+  setSmartPins: (pins: SmartPin[]) => void;
+
   // AI Copywriting
   copyAnalysis: ProductCopyAnalysis | null;
   setCopyAnalysis: (analysis: ProductCopyAnalysis | null) => void;
@@ -149,7 +152,7 @@ interface AppStore extends ProductState {
   setActiveModelId: (id: string | null) => void;
 }
 
-const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks' | 'setSelectedBlockId' | 'setActiveTab' | 'setDesignKeywords' | 'setComparisons' | 'setUploadedImages' | 'setProductNameInput' | 'setMainImageUrl' | 'setCopyAnalysis' | 'addVideoLog' | 'updateVideoLog' | 'setActiveVideoLogId' | 'addToBackgroundHistory' | 'clearBackgroundHistory' | 'addSavedModel' | 'removeSavedModel' | 'updateSavedModel' | 'setActiveModelId'> = {
+const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks' | 'setSelectedBlockId' | 'setActiveTab' | 'setDesignKeywords' | 'setComparisons' | 'setUploadedImages' | 'setProductNameInput' | 'setMainImageUrl' | 'setSmartPins' | 'setCopyAnalysis' | 'addVideoLog' | 'updateVideoLog' | 'setActiveVideoLogId' | 'addToBackgroundHistory' | 'clearBackgroundHistory' | 'addSavedModel' | 'removeSavedModel' | 'updateSavedModel' | 'setActiveModelId'> = {
   credits: 0,
   user: null, // Supabase User
   brandName: 'NEW BRAND',
@@ -229,6 +232,7 @@ const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 
   comparisons: [],
   uploadedImages: [],
   productNameInput: '',
+  smartPins: [],
   // mainImageUrl is null
   copyAnalysis: null,
   videoLogs: [],
@@ -453,6 +457,8 @@ export const useStore = create<AppStore>()(
       setUploadedImages: (images) => set({ uploadedImages: images }),
       setProductNameInput: (name) => set({ productNameInput: name }),
       setMainImageUrl: (url) => set({ mainImageUrl: url }),
+
+      setSmartPins: (pins) => set({ smartPins: pins }),
 
       // Copywriting
       setCopyAnalysis: (analysis) => set({ copyAnalysis: analysis }),

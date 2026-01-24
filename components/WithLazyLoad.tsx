@@ -9,7 +9,7 @@ export const WithLazyLoad = <P extends object>(
     Component: ComponentType<P>,
     LoadingMessage: string = 'Loading...'
 ) => {
-    return (props: P) => (
+    const LazyComponent = (props: P) => (
         <Suspense
             fallback={
                 <div className="flex flex-col items-center justify-center p-8 text-gray-400">
@@ -21,4 +21,7 @@ export const WithLazyLoad = <P extends object>(
             <Component {...props} />
         </Suspense>
     );
+
+    LazyComponent.displayName = `Lazy(${Component.displayName || Component.name || 'Component'})`;
+    return LazyComponent;
 };

@@ -35,6 +35,7 @@ const CanvasEditor: React.FC = () => {
     useEffect(() => {
         // If no blocks and no main image, show onboarding
         if (pageBlocks.length === 0 && !mainImageUrl) {
+            // eslint-disable-next-line react-hooks/exhaustive-deps
             setShowOnboarding(true);
         }
     }, [pageBlocks.length, mainImageUrl]);

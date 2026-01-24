@@ -3,15 +3,15 @@ import { BatchPose, BatchColorVariant, BatchProductCategory, BatchResolution } f
 
 export const getPosesForCategory = (category: BatchProductCategory): BatchPose[] => {
     // SEATED 포즈 제거됨 - 어색한 결과물 발생으로 인해 삭제
-    const basePoses: BatchPose[] = ['FRONT_FULL', 'SIDE_FULL', 'WALKING'];
+    const basePoses: BatchPose[] = ['FRONT_FULL', 'SIDE_LEFT', 'SIDE_RIGHT', 'WALKING'];
 
     let cropPoses: BatchPose[] = [];
     if (category === 'TOP') {
         cropPoses = ['CROP_COLLAR', 'CROP_TEXTURE', 'CROP_POCKET'];
     } else if (category === 'BOTTOM') {
-        cropPoses = ['CROP_WAIST', 'CROP_HEM', 'CROP_TEXTURE', 'CROP_POCKET'];
+        cropPoses = ['CROP_TEXTURE', 'CROP_POCKET'];
     } else { // ONEPIECE
-        cropPoses = ['CROP_COLLAR', 'CROP_WAIST', 'CROP_TEXTURE', 'CROP_HEM'];
+        cropPoses = ['CROP_COLLAR', 'CROP_TEXTURE'];
     }
 
     return [...basePoses, ...cropPoses];
@@ -135,7 +135,7 @@ export const generateBatchItem = async (
     featureConstraints: string = "",
     synthesizedVibe?: string, // ✨ New Param: Multi-Ref Vibe
     userPrompt: string = "" // 🆕 User Custom Prompt
-): Promise<string> => {
+): Promise<{ imageUrl: string; usedModel: string }> => {
 
     const posePrompt = BATCH_POSE_PROMPTS[pose];
     const isCrop = pose.startsWith('CROP_'); // Check if it's a detail shot

@@ -33,7 +33,9 @@ const EditorController: React.FC<EditorControllerProps> = ({ onOpenNanoBanana })
         designKeywords,
         setDesignKeywords,
         productNameInput,
-        setProductNameInput
+        setProductNameInput,
+        smartPins,
+        setSmartPins
     } = useStore();
 
     const [isAnalyzingVision, setIsAnalyzingVision] = React.useState(false);
@@ -56,16 +58,17 @@ const EditorController: React.FC<EditorControllerProps> = ({ onOpenNanoBanana })
             const result = await analyzeProductVision(mainImageUrl, productNameInput);
 
             if (result.status === 'success') {
-                setDesignKeywords(result.data.design_keywords);
-                setComparisons(result.data.comparison_table);
+                setDesignKeywords(result.data.design_keywords || []);
+                setComparisons(result.data.comparison_table || []);
 
                 // Add DESIGN Block automatically
                 addPageBlock({
                     id: `block_${Date.now()}`,
                     type: 'DESIGN',
                     isVisible: true,
+                    order: pageBlocks.length,
                     data: {
-                        keywords: result.data.design_keywords
+                        keywords: result.data.design_keywords || []
                     }
                 });
 
@@ -75,6 +78,7 @@ const EditorController: React.FC<EditorControllerProps> = ({ onOpenNanoBanana })
                         id: `block_type_${Date.now()}`,
                         type: 'TYPOGRAPHY',
                         isVisible: true,
+                        order: pageBlocks.length + 1,
                         data: {
                             typography: result.data.auto_typography
                         }

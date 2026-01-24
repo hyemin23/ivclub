@@ -1,5 +1,5 @@
 
-import { GeminiErrorType } from '../geminiService';
+import { GeminiErrorType } from '../../types';
 
 export type MaskArea = 'Top' | 'Bottom' | 'Outer';
 

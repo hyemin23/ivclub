@@ -51,9 +51,9 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, onCo
                 reader.readAsDataURL(images[0]);
             });
 
-            const result = await analyzeProductVision(imageBase64);
+            const result = await analyzeProductVision(imageBase64, "New Product");
             onComplete(images, result);
-        } catch (err: any) {
+        } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
             console.error('Vision AI 분석 실패:', err);
             // 실패 시 기본값 사용
             const defaultResult = getDefaultVisionAnalysis();

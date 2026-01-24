@@ -117,7 +117,7 @@ const Step2BatchStudio: React.FC = () => {
         });
 
         // Update Matrix with NEW items
-        let currentMatrix = [...matrix, ...newItems];
+        const currentMatrix = [...matrix, ...newItems];
         setMatrix(currentMatrix);
 
         setIsGenerating(true);

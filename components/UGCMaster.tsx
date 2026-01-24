@@ -5,8 +5,8 @@ import { Sparkles, Loader2, Download, Zap, FileUp, Smartphone, Users, User, Tras
 import { toast } from 'sonner';
 import LocationGrid from './LocationGrid';
 import { LOCATIONS } from '../constants/ugcPresets';
-import { GenerationConfig, Quality, GenerationResult, Gender, Mode } from '../types';
-import { generateFashionContent, refinePrompt, parseGeminiError, GeminiErrorType } from '../services/geminiService';
+import { GenerationConfig, Quality, GenerationResult, Gender, Mode, GeminiErrorType } from '../types';
+import { generateFashionContent, refinePrompt, parseGeminiError } from '../services/geminiService';
 
 interface ExtendedResult extends GenerationResult {
   status: 'loading' | 'success' | 'error';
@@ -269,8 +269,8 @@ const UGCMaster: React.FC = () => {
                 onClick={handleRefine}
                 disabled={isRefining}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${isRefining
-                    ? 'bg-white/10 border-white/10 text-gray-500'
-                    : 'bg-white/5 border-white/10 text-indigo-400 hover:bg-white/10 hover:border-indigo-400'
+                  ? 'bg-white/10 border-white/10 text-gray-500'
+                  : 'bg-white/5 border-white/10 text-indigo-400 hover:bg-white/10 hover:border-indigo-400'
                   }`}
               >
                 {isRefining ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
@@ -354,8 +354,8 @@ const UGCMaster: React.FC = () => {
               onClick={handleGenerate}
               disabled={isGenerating}
               className={`w-full py-6 rounded-[2.5rem] font-black text-lg transition-all relative overflow-hidden group shadow-2xl ${isGenerating
-                  ? 'bg-white/10 text-gray-500 cursor-not-allowed'
-                  : 'bg-white text-black hover:scale-[1.02] active:scale-[0.98] shadow-white/20'
+                ? 'bg-white/10 text-gray-500 cursor-not-allowed'
+                : 'bg-white text-black hover:scale-[1.02] active:scale-[0.98] shadow-white/20'
                 }`}
             >
               {isGenerating ? (

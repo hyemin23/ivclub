@@ -39,7 +39,7 @@ const SizeGuideSystem: React.FC<{ readOnly?: boolean }> = ({ readOnly = false })
 
             if (sizes && sizes.length > 0) {
                 if (category && category !== store.sizeCategory) {
-                    store.setSizeCategory(category);
+                    store.setSizeCategory(category as SizeCategory);
                 }
                 store.setSizeTable(sizes);
                 alert(`성공적으로 추출되었습니다! (카테고리: ${category || 'Unknown'}, 총 ${sizes.length}개 사이즈)`);

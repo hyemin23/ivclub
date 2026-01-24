@@ -4,6 +4,7 @@ import { ProductSpecs } from '../../types';
 interface TemplateProps {
     id: string;
     imageUrl?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     copy?: any;
     mood?: string;
     colorHex?: string;
@@ -112,7 +113,7 @@ export const VisualSection: React.FC<TemplateProps> = ({ id, imageUrl, copy }) =
         <div id={id} className="w-[640px] bg-white text-center">
             <div className="py-16 px-10">
                 <p className="text-lg text-gray-800 font-serif italic leading-relaxed whitespace-pre-wrap">
-                    "{copy?.desc || "Comfortable fit in your daily life."}"
+                    &quot;{copy?.desc || "Comfortable fit in your daily life."}&quot;
                 </p>
                 {copy?.title && (
                     <p className="mt-4 text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">

@@ -25,13 +25,14 @@ interface SidebarGroupProps {
 export const SidebarGroup: React.FC<SidebarGroupProps> = ({ group, isSidebarOpen, appView, setAppView }) => {
   // Check if this group contains the active view
   const isActiveGroup = group.items.some(item => item.id === appView);
-  
+
   // State for accordion: default expands if active
   const [isExpanded, setIsExpanded] = useState(isActiveGroup);
 
   // Update expansion when appView changes (auto-expand logic)
   useEffect(() => {
-    if (isActiveGroup) setIsExpanded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (isActiveGroup && !isExpanded) setIsExpanded(true);
   }, [appView, isActiveGroup]);
 
   return (

@@ -4,7 +4,8 @@ import { Sparkles, Loader2, Download, Zap, FileUp, Smartphone, Users, User, Tras
 import LocationGrid from './LocationGrid';
 import { LOCATIONS } from '../constants/ugcPresets';
 import { GenerationConfig, Quality, GenerationResult, Gender, Mode } from '../types';
-import { generateFashionContent, refinePrompt, parseGeminiError, GeminiErrorType } from '../services/geminiService';
+import { generateFashionContent, refinePrompt, parseGeminiError } from '../services/geminiService';
+import { GeminiErrorType } from '../../types';
 
 interface ExtendedResult extends GenerationResult {
   status: 'loading' | 'success' | 'error';
@@ -23,10 +24,10 @@ const UGCMaster: React.FC = () => {
     mode: 'Single',
     imageFile: null
   });
-  
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState<{current: number, total: number} | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<{ current: number, total: number } | null>(null);
   const [results, setResults] = useState<ExtendedResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,17 +99,17 @@ const UGCMaster: React.FC = () => {
       setError("장소를 하나 이상 선택해주세요.");
       return;
     }
-    
+
     setError(null);
     setIsGenerating(true);
-    setResults([]); 
-    
+    setResults([]);
+
     const total = config.locationIds.length;
     for (let i = 0; i < total; i++) {
       setGenerationProgress({ current: i + 1, total });
       await generateSpot(config.locationIds[i]);
     }
-    
+
     setIsGenerating(false);
     setGenerationProgress(null);
   };
@@ -170,7 +171,7 @@ const UGCMaster: React.FC = () => {
   const handleToggleLocation = (id: string) => {
     setConfig(prev => {
       const isSelected = prev.locationIds.includes(id);
-      const newIds = isSelected 
+      const newIds = isSelected
         ? prev.locationIds.filter(lid => lid !== id)
         : [...prev.locationIds, id];
       return { ...prev, locationIds: newIds };
@@ -184,16 +185,15 @@ const UGCMaster: React.FC = () => {
           <h1 className="text-3xl font-black tracking-tighter text-white uppercase">바이럴 UGC 생성기</h1>
           <p className="text-gray-500 text-sm">하이엔드 브랜드를 위한 초실사 소셜 패션 콘텐츠 엔진.</p>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex gap-1 p-1 bg-white/5 rounded-xl border border-white/10">
             {(['Single', 'Couple'] as Mode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setConfig(prev => ({ ...prev, mode: m }))}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black tracking-widest transition-all flex items-center gap-2 ${
-                  config.mode === m ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
-                }`}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black tracking-widest transition-all flex items-center gap-2 ${config.mode === m ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
               >
                 {m === 'Single' ? <User className="w-3 h-3" /> : <Users className="w-3 h-3" />}
                 {m === 'Single' ? '단일 모델' : '커플 모델'}
@@ -206,9 +206,8 @@ const UGCMaster: React.FC = () => {
               <button
                 key={q}
                 onClick={() => setConfig(prev => ({ ...prev, quality: q }))}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                  config.quality === q ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
-                }`}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${config.quality === q ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                  }`}
               >
                 {q} 해상도
               </button>
@@ -227,11 +226,10 @@ const UGCMaster: React.FC = () => {
               </h2>
               <span className="text-[10px] font-black text-indigo-400 tracking-widest uppercase">아이폰 4K RAW 소스 주입</span>
             </div>
-            <div 
+            <div
               onClick={() => fileInputRef.current?.click()}
-              className={`relative group cursor-pointer aspect-[16/6] rounded-[2.5rem] border-2 border-dashed transition-all flex flex-col items-center justify-center overflow-hidden ${
-                config.imageFile ? 'border-white bg-white/5' : 'border-white/10 hover:border-white/30 bg-white/[0.02]'
-              }`}
+              className={`relative group cursor-pointer aspect-[16/6] rounded-[2.5rem] border-2 border-dashed transition-all flex flex-col items-center justify-center overflow-hidden ${config.imageFile ? 'border-white bg-white/5' : 'border-white/10 hover:border-white/30 bg-white/[0.02]'
+                }`}
             >
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
               {config.imageFile ? (
@@ -239,7 +237,7 @@ const UGCMaster: React.FC = () => {
                   <div className="px-6 py-3 bg-white text-black rounded-full font-black text-xs flex items-center gap-2">
                     <FileUp className="w-4 h-4" /> {config.imageFile.name}
                   </div>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); setConfig(prev => ({ ...prev, imageFile: null })); }}
                     className="absolute top-4 right-4 p-2 bg-black/80 rounded-full hover:bg-red-500 transition-colors"
                   >
@@ -269,11 +267,10 @@ const UGCMaster: React.FC = () => {
               <button
                 onClick={handleRefine}
                 disabled={isRefining}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${
-                  isRefining 
-                    ? 'bg-white/10 border-white/10 text-gray-500' 
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${isRefining
+                    ? 'bg-white/10 border-white/10 text-gray-500'
                     : 'bg-white/5 border-white/10 text-indigo-400 hover:bg-white/10 hover:border-indigo-400'
-                }`}
+                  }`}
               >
                 {isRefining ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                 프롬프트 정제
@@ -286,9 +283,8 @@ const UGCMaster: React.FC = () => {
                   <button
                     key={g}
                     onClick={() => setConfig(prev => ({ ...prev, gender: g }))}
-                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${
-                      config.gender === g ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
-                    }`}
+                    className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${config.gender === g ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+                      }`}
                   >
                     {g === 'Male' ? '남성 모델' : '여성 모델'}
                   </button>
@@ -299,8 +295,8 @@ const UGCMaster: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">의류 상세 특징</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="예: 헤비 코튼 후드티, 오버핏"
                   className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-medium focus:outline-none focus:border-white transition-colors"
                   value={config.productFeatures}
@@ -309,8 +305,8 @@ const UGCMaster: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">타겟 페르소나</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="예: 20대 대학생, 자연스러운 분위기"
                   className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-medium focus:outline-none focus:border-white transition-colors"
                   value={config.targetAudience}
@@ -320,7 +316,7 @@ const UGCMaster: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">스타일링 코디 (OOTD)</label>
-              <textarea 
+              <textarea
                 rows={2}
                 placeholder="예: 배기 블루 빈티지 데님, 화이트 청키 스니커즈, 스마트폰을 들고 있는 모습"
                 className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-xs font-medium focus:outline-none focus:border-white transition-colors resize-none"
@@ -337,8 +333,8 @@ const UGCMaster: React.FC = () => {
                 하이퍼 리얼 스팟 선택
               </h2>
               <div className="flex items-center gap-4">
-                  <span className="text-[10px] font-black text-white/40">{config.locationIds.length}개 선택됨</span>
-                  <button onClick={() => setConfig(prev => ({ ...prev, locationIds: LOCATIONS.map(l => l.id).sort(() => Math.random() - 0.5).slice(0, 3) }))} className="text-[10px] font-black text-indigo-400 hover:text-white transition-colors flex items-center gap-1">🎲 랜덤 셔플</button>
+                <span className="text-[10px] font-black text-white/40">{config.locationIds.length}개 선택됨</span>
+                <button onClick={() => setConfig(prev => ({ ...prev, locationIds: LOCATIONS.map(l => l.id).sort(() => Math.random() - 0.5).slice(0, 3) }))} className="text-[10px] font-black text-indigo-400 hover:text-white transition-colors flex items-center gap-1">🎲 랜덤 셔플</button>
               </div>
             </div>
             <LocationGrid selectedIds={config.locationIds} onToggle={handleToggleLocation} />
@@ -356,20 +352,19 @@ const UGCMaster: React.FC = () => {
             <button
               onClick={handleGenerate}
               disabled={isGenerating}
-              className={`w-full py-6 rounded-[2.5rem] font-black text-lg transition-all relative overflow-hidden group shadow-2xl ${
-                isGenerating 
-                  ? 'bg-white/10 text-gray-500 cursor-not-allowed' 
+              className={`w-full py-6 rounded-[2.5rem] font-black text-lg transition-all relative overflow-hidden group shadow-2xl ${isGenerating
+                  ? 'bg-white/10 text-gray-500 cursor-not-allowed'
                   : 'bg-white text-black hover:scale-[1.02] active:scale-[0.98] shadow-white/20'
-              }`}
+                }`}
             >
               {isGenerating ? (
                 <div className="flex flex-col items-center justify-center">
                   <div className="flex items-center gap-4">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      메타데이터 주입 중...
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    메타데이터 주입 중...
                   </div>
                   {generationProgress && (
-                      <div className="mt-2 text-[10px] font-black tracking-widest opacity-50 uppercase">렌더링 진행: {generationProgress.current} / {generationProgress.total}</div>
+                    <div className="mt-2 text-[10px] font-black tracking-widest opacity-50 uppercase">렌더링 진행: {generationProgress.current} / {generationProgress.total}</div>
                   )}
                 </div>
               ) : (
@@ -380,11 +375,11 @@ const UGCMaster: React.FC = () => {
             <div className={`min-h-[500px] rounded-[3rem] glass-panel p-6 flex flex-col relative group transition-all duration-700 bg-black/40 border-white/5 overflow-y-auto custom-scrollbar max-h-[800px]`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                   <div className={`w-2 h-2 rounded-full ${isGenerating ? 'bg-indigo-500 animate-pulse' : 'bg-green-500'}`} />
-                   <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">뉴럴 갤러리</span>
+                  <div className={`w-2 h-2 rounded-full ${isGenerating ? 'bg-indigo-500 animate-pulse' : 'bg-green-500'}`} />
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">뉴럴 갤러리</span>
                 </div>
                 {results.some(r => r.status === 'success') && !isGenerating && (
-                  <button 
+                  <button
                     onClick={handleDownloadAll}
                     className="px-4 py-2 bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 rounded-xl text-[10px] font-black flex items-center gap-2 transition-all"
                   >
@@ -416,14 +411,14 @@ const UGCMaster: React.FC = () => {
                       ) : res.status === 'error' ? (
                         <div className="flex flex-col items-center text-center p-8 space-y-4">
                           <div className="w-14 h-14 bg-red-500/10 rounded-2xl flex items-center justify-center text-red-500">
-                            {res.errorType === 'safety' ? <ShieldAlert className="w-7 h-7" /> : 
-                             res.errorType === 'auth' ? <Key className="w-7 h-7" /> : <AlertCircle className="w-7 h-7" />}
+                            {res.errorType === 'safety' ? <ShieldAlert className="w-7 h-7" /> :
+                              res.errorType === 'auth' ? <Key className="w-7 h-7" /> : <AlertCircle className="w-7 h-7" />}
                           </div>
                           <div>
                             <p className="text-red-400 text-[10px] font-black uppercase tracking-widest mb-1">{res.errorType} Error</p>
                             <p className="text-gray-500 text-[10px] leading-relaxed max-w-[200px]">{res.errorMessage}</p>
                           </div>
-                          <button 
+                          <button
                             onClick={() => handleRetry(res.id, res.locationName)}
                             className="px-6 py-2.5 bg-white text-black rounded-full text-[10px] font-black flex items-center gap-2 hover:scale-105 transition-transform"
                           >
@@ -434,7 +429,7 @@ const UGCMaster: React.FC = () => {
                         <>
                           <img src={res.imageUrl} className="w-full h-full object-cover" alt={`UGC ${res.locationName}`} />
                           <div className="absolute top-4 left-4 flex gap-2">
-                             <button 
+                            <button
                               onClick={() => handleDownload(res.imageUrl, `ugc-${res.locationName.toLowerCase().replace(/\s/g, '-')}`)}
                               className="px-4 py-2 bg-black/50 hover:bg-black/80 backdrop-blur-md rounded-full text-[10px] font-black tracking-widest text-white border border-white/10 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
                             >

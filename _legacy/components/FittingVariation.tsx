@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 // Added missing Loader2 import
 import { Sparkles, Download, ImageIcon, RefreshCw, X, Maximize2, Monitor, Clipboard, Layers, Eye, User, UserSquare, UserCircle, Video, Minimize2, ArrowDown, ArrowUp, RotateCcw, MoveLeft, MoveRight, CornerUpLeft, CornerUpRight, AlertCircle, ShieldAlert, Key, Loader2 } from 'lucide-react';
-import { generateFittingVariation, parseGeminiError, GeminiErrorType } from '../services/geminiService';
+import { generateFittingVariation, parseGeminiError } from '../services/geminiService';
+import { GeminiErrorType } from '../../types';
 import { Resolution, AspectRatio, ViewMode, FaceMode, Gender, CameraAngle } from '../types';
 
 interface VariationResult {
@@ -25,15 +26,15 @@ const ZoomImage = ({ src, onClick, alt }: { src: string, onClick?: () => void, a
   };
 
   return (
-    <div 
+    <div
       className="relative w-full h-full overflow-hidden cursor-zoom-in"
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
     >
-      <img 
-        src={src} 
+      <img
+        src={src}
         alt={alt}
         className="w-full h-full object-contain transition-transform duration-300 ease-out"
         style={{
@@ -49,14 +50,14 @@ const FittingVariation: React.FC = () => {
   const [baseImage, setBaseImage] = useState<string | null>(null);
   const [refImage, setRefImage] = useState<string | null>(null);
   const [faceRefImage, setFaceRefImage] = useState<string | null>(null);
-  
+
   const [prompt, setPrompt] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('full');
   const [cameraAngle, setCameraAngle] = useState<CameraAngle>('default');
   const [resolution, setResolution] = useState<Resolution>('2K');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [imageCount, setImageCount] = useState<number>(1);
-  
+
   const [faceMode, setFaceMode] = useState<FaceMode>('OFF');
   const [gender, setGender] = useState<Gender>('Female');
 
@@ -115,11 +116,11 @@ const FittingVariation: React.FC = () => {
       setResults(prev => prev.map(r => r.id === id ? { ...r, url, status: 'success' } : r));
     } catch (error) {
       const parsed = parseGeminiError(error);
-      setResults(prev => prev.map(r => r.id === id ? { 
-        ...r, 
-        status: 'error', 
-        errorType: parsed.type, 
-        errorMessage: parsed.message 
+      setResults(prev => prev.map(r => r.id === id ? {
+        ...r,
+        status: 'error',
+        errorType: parsed.type,
+        errorMessage: parsed.message
       } : r));
     }
   };
@@ -127,20 +128,20 @@ const FittingVariation: React.FC = () => {
   const handleGenerate = async () => {
     if (!baseImage) return;
     setIsLoading(true);
-    
+
     const newResults: VariationResult[] = Array.from({ length: imageCount }).map((_, i) => ({
       id: `${Date.now()}-${i}`,
       url: '',
       status: 'loading'
     }));
-    
+
     setResults(newResults);
-    
+
     // Sequential generation to avoid hitting concurrent limits and manage individual states better
     for (const res of newResults) {
       await generateSingleResult(res.id);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -193,11 +194,10 @@ const FittingVariation: React.FC = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">상품/배경 고정 (MAIN)</label>
-                <div 
+                <div
                   onClick={() => document.getElementById('fv-base-upload')?.click()}
-                  className={`relative aspect-square rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center ${
-                    baseImage ? 'border-indigo-500 bg-indigo-500/5' : 'border-slate-800 hover:border-slate-700 bg-slate-950'
-                  }`}
+                  className={`relative aspect-square rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center ${baseImage ? 'border-indigo-500 bg-indigo-500/5' : 'border-slate-800 hover:border-slate-700 bg-slate-950'
+                    }`}
                 >
                   {baseImage ? (
                     <>
@@ -215,11 +215,10 @@ const FittingVariation: React.FC = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">포즈 레퍼런스 (POSE ONLY)</label>
-                <div 
+                <div
                   onClick={() => document.getElementById('fv-ref-upload')?.click()}
-                  className={`relative aspect-square rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center ${
-                    refImage ? 'border-indigo-500 bg-indigo-500/5' : 'border-slate-800 hover:border-slate-700 bg-slate-950'
-                  }`}
+                  className={`relative aspect-square rounded-2xl border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center ${refImage ? 'border-indigo-500 bg-indigo-500/5' : 'border-slate-800 hover:border-slate-700 bg-slate-950'
+                    }`}
                 >
                   {refImage ? (
                     <>
@@ -246,9 +245,8 @@ const FittingVariation: React.FC = () => {
                   <button
                     key={angle.id}
                     onClick={() => setCameraAngle(angle.id as CameraAngle)}
-                    className={`flex flex-col items-center gap-1.5 py-2.5 rounded-xl border transition-all ${
-                      cameraAngle === angle.id ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
-                    }`}
+                    className={`flex flex-col items-center gap-1.5 py-2.5 rounded-xl border transition-all ${cameraAngle === angle.id ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
+                      }`}
                   >
                     {angle.icon}
                     <span className="text-[9px] font-bold whitespace-nowrap">{angle.label}</span>
@@ -260,29 +258,26 @@ const FittingVariation: React.FC = () => {
             <div className="space-y-3">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">프레이밍 (FRAMING)</label>
               <div className="grid grid-cols-3 gap-3">
-                <button 
+                <button
                   onClick={() => setViewMode('top')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${
-                    viewMode === 'top' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
-                  }`}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${viewMode === 'top' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
+                    }`}
                 >
                   <UserCircle className="w-5 h-5" />
                   <span className="text-[11px] font-bold">상반신컷</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setViewMode('full')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${
-                    viewMode === 'full' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
-                  }`}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${viewMode === 'full' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
+                    }`}
                 >
                   <User className="w-5 h-5" />
                   <span className="text-[11px] font-bold">전신컷</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setViewMode('bottom')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${
-                    viewMode === 'bottom' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
-                  }`}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all ${viewMode === 'bottom' ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
+                    }`}
                 >
                   <UserSquare className="w-5 h-5" />
                   <span className="text-[11px] font-bold">하반신컷</span>
@@ -297,13 +292,13 @@ const FittingVariation: React.FC = () => {
                   <span className="text-xs font-bold uppercase tracking-widest text-slate-400">모델 얼굴 노출</span>
                 </div>
                 <div className="flex p-1 bg-slate-900 rounded-xl border border-slate-800">
-                  <button 
+                  <button
                     onClick={() => setFaceMode('OFF')}
                     className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${faceMode === 'OFF' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-500'}`}
                   >
                     OFF
                   </button>
-                  <button 
+                  <button
                     onClick={() => setFaceMode('ON')}
                     className={`px-4 py-1.5 rounded-lg text-[10px] font-bold transition-all ${faceMode === 'ON' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500'}`}
                   >
@@ -314,13 +309,13 @@ const FittingVariation: React.FC = () => {
 
               {faceMode === 'ON' && (
                 <div className="grid grid-cols-2 gap-3 animate-in zoom-in-95">
-                  <button 
+                  <button
                     onClick={() => setGender('Male')}
                     className={`py-2 rounded-lg border text-[10px] font-bold transition-all ${gender === 'Male' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500'}`}
                   >
                     남성 모델
                   </button>
-                  <button 
+                  <button
                     onClick={() => setGender('Female')}
                     className={`py-2 rounded-lg border text-[10px] font-bold transition-all ${gender === 'Female' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500'}`}
                   >
@@ -332,7 +327,7 @@ const FittingVariation: React.FC = () => {
 
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">추가 자유 프롬프트 (OPTIONAL)</label>
-              <textarea 
+              <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="나머지 규칙은 NanoBanana PRO가 준수합니다. 특별히 강조하고 싶은 내용만 입력하세요."
@@ -361,7 +356,7 @@ const FittingVariation: React.FC = () => {
               </div>
             </div>
 
-            <button 
+            <button
               onClick={handleGenerate}
               disabled={isLoading || !baseImage}
               className="w-full py-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-500/20 disabled:opacity-50 transition-all hover:scale-[1.01] flex items-center justify-center gap-3"
@@ -381,7 +376,7 @@ const FittingVariation: React.FC = () => {
           </div>
           <div className="flex items-center gap-4">
             {results.some(r => r.status === 'success') && !isLoading && (
-              <button 
+              <button
                 onClick={handleDownloadAll}
                 className="px-3 py-1.5 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-lg text-[9px] font-black flex items-center gap-2 uppercase tracking-widest transition-all"
               >
@@ -403,14 +398,14 @@ const FittingVariation: React.FC = () => {
                 ) : res.status === 'error' ? (
                   <div className="flex flex-col items-center text-center p-4 space-y-3">
                     <div className="w-12 h-12 bg-red-500/10 rounded-xl flex items-center justify-center text-red-500">
-                      {res.errorType === 'safety' ? <ShieldAlert className="w-6 h-6" /> : 
-                       res.errorType === 'auth' ? <Key className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
+                      {res.errorType === 'safety' ? <ShieldAlert className="w-6 h-6" /> :
+                        res.errorType === 'auth' ? <Key className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
                     </div>
                     <div className="space-y-1">
                       <p className="text-red-400 text-[9px] font-black uppercase tracking-widest">{res.errorType} Error</p>
                       <p className="text-gray-500 text-[9px] leading-tight max-w-[120px]">{res.errorMessage}</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => handleRetry(res.id)}
                       className="px-4 py-1.5 bg-white text-black rounded-full text-[9px] font-black flex items-center gap-2 hover:bg-gray-100 transition-colors"
                     >

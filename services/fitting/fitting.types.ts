@@ -1,5 +1,5 @@
 
-import { GeminiErrorType } from '../geminiService';
+import { GeminiErrorType } from '../../types';
 
 export interface VariationResult {
     id: string;

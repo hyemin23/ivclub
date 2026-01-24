@@ -29,8 +29,8 @@ export const MainBannerTemplate: React.FC<TemplateProps> = ({ id, imageUrl, copy
 
             {/* Overlay - Style varies by mood */}
             <div className={`absolute inset-0 flex flex-col justify-end p-8 ${isMinimal
-                    ? 'bg-gradient-to-t from-black/50 via-transparent to-transparent'
-                    : 'bg-gradient-to-t from-black/80 via-black/20 to-transparent'
+                ? 'bg-gradient-to-t from-black/50 via-transparent to-transparent'
+                : 'bg-gradient-to-t from-black/80 via-black/20 to-transparent'
                 }`}>
                 <h1 className={`text-white whitespace-pre-wrap mb-4 drop-shadow-lg ${isMinimal ? 'text-4xl font-light tracking-widest' : 'text-5xl font-black italic tracking-tighter'
                     }`}>
@@ -86,7 +86,7 @@ export const TpoCardTemplate: React.FC<TemplateProps> = ({ id, imageUrl, copy, m
                 </div>
 
                 <div className="text-center pb-2">
-                    <h3 className="font-serif text-xl italic text-gray-800 mb-1">"{copy.title}"</h3>
+                    <h3 className="font-serif text-xl italic text-gray-800 mb-1">&quot;{copy.title}&quot;</h3>
                     <p className="text-xs font-sans text-gray-400 uppercase tracking-widest">{copy.desc}</p>
                 </div>
             </div>

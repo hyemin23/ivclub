@@ -5,13 +5,13 @@ import { useStore } from '../store';
 // Helper to ensure clean export
 const ExportableContent = ({ store }: { store: any }) => {
     return (
-        <div className="flex flex-col bg-white w-[800px]"> 
+        <div className="flex flex-col bg-white w-[800px]">
             {/* Fixed width 800px ensures consistent export quality */}
-            
+
             {/* 0. Event/Notice */}
             {store.brandAssets.find((a: any) => a.id === 'event')?.isEnabled && store.brandAssets.find((a: any) => a.id === 'event')?.imageUrl && (
                 <DownloadableSection fileName={`event_${store.name}`}>
-                    <img src={store.brandAssets.find((a: any) => a.id === 'event')?.imageUrl!} className="w-full block" alt="Event" />
+                    <img src={store.brandAssets.find((a: any) => a.id === 'event')?.imageUrl || ""} className="w-full block" alt="Event" />
                     <div className="h-4 bg-white" />
                 </DownloadableSection>
             )}
@@ -19,7 +19,7 @@ const ExportableContent = ({ store }: { store: any }) => {
             {/* 1. Brand Intro */}
             {store.brandAssets.find((a: any) => a.id === 'intro')?.isEnabled && store.brandAssets.find((a: any) => a.id === 'intro')?.imageUrl && (
                 <DownloadableSection fileName={`intro_${store.name}`}>
-                    <img src={store.brandAssets.find((a: any) => a.id === 'intro')?.imageUrl!} className="w-full block" alt="Intro" />
+                    <img src={store.brandAssets.find((a: any) => a.id === 'intro')?.imageUrl || ""} className="w-full block" alt="Intro" />
                     <div className="h-12 bg-white" />
                 </DownloadableSection>
             )}
@@ -46,16 +46,16 @@ const ExportableContent = ({ store }: { store: any }) => {
             {/* 4. Size Guide (Placeholder) */}
             <DownloadableSection fileName={`sizeguide_${store.name}`}>
                 <div className="py-20 text-center bg-white">
-                   <h2 className="text-lg font-bold">SIZE GUIDE</h2>
-                   <p className="text-gray-400 text-sm mt-2">({store.sizeCategory})</p>
+                    <h2 className="text-lg font-bold">SIZE GUIDE</h2>
+                    <p className="text-gray-400 text-sm mt-2">({store.sizeCategory})</p>
                 </div>
                 <div className="h-12 bg-white" />
             </DownloadableSection>
 
-             {/* 5. Washing */}
+            {/* 5. Washing */}
             {store.brandAssets.find((a: any) => a.id === 'washing')?.isEnabled && store.brandAssets.find((a: any) => a.id === 'washing')?.imageUrl && (
-                 <DownloadableSection fileName={`washing_${store.name}`}>
-                    <img src={store.brandAssets.find((a: any) => a.id === 'washing')?.imageUrl!} className="w-full block" alt="Washing" />
+                <DownloadableSection fileName={`washing_${store.name}`}>
+                    <img src={store.brandAssets.find((a: any) => a.id === 'washing')?.imageUrl || ""} className="w-full block" alt="Washing" />
                     <div className="h-12 bg-white" />
                 </DownloadableSection>
             )}
@@ -63,7 +63,7 @@ const ExportableContent = ({ store }: { store: any }) => {
             {/* 6. Model Info */}
             {(() => {
                 const asset = store.brandAssets.find((a: any) => a.id === 'model_info');
-                 if (asset?.isEnabled && asset.imageUrl) {
+                if (asset?.isEnabled && asset.imageUrl) {
                     return (
                         <DownloadableSection fileName={`model_${store.name}`}>
                             <div className="relative w-full">
@@ -89,10 +89,10 @@ const ExportableContent = ({ store }: { store: any }) => {
                 return null;
             })()}
 
-             {/* 7. Notice */}
-             {store.brandAssets.find((a: any) => a.id === 'notice')?.isEnabled && store.brandAssets.find((a: any) => a.id === 'notice')?.imageUrl && (
-                 <DownloadableSection fileName={`notice_${store.name}`}>
-                    <img src={store.brandAssets.find((a: any) => a.id === 'notice')?.imageUrl!} className="w-full block" alt="Notice" />
+            {/* 7. Notice */}
+            {store.brandAssets.find((a: any) => a.id === 'notice')?.isEnabled && store.brandAssets.find((a: any) => a.id === 'notice')?.imageUrl && (
+                <DownloadableSection fileName={`notice_${store.name}`}>
+                    <img src={store.brandAssets.find((a: any) => a.id === 'notice')?.imageUrl || ""} className="w-full block" alt="Notice" />
                 </DownloadableSection>
             )}
         </div>

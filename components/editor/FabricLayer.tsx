@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as fabric from 'fabric'; // v6 or v5
 import { useStore } from '@/store';
 import { DesignKeyword } from '@/types';
@@ -21,79 +21,8 @@ export const FabricLayer: React.FC<FabricLayerProps> = ({ width, height, imageUr
     const targetImage = imageUrl || mainImageUrl;
     const targetKeywords = keywords || designKeywords;
 
-    // Initialize Canvas
-    useEffect(() => {
-        if (!canvasRef.current || !targetImage) return;
-
-        // Dispose previous canvas if exists
-        if (fabricCanvas) {
-            fabricCanvas.dispose();
-        }
-
-        const canvas = new fabric.Canvas(canvasRef.current, {
-            width: width,
-            height: height,
-            backgroundColor: '#f3f4f6'
-        });
-
-        // Load Background Image
-        fabric.Image.fromURL(targetImage, (img: any) => {
-            if (!img) return;
-
-            // Scale image to cover canvas (Contain logic)
-            const scale = Math.min(width / img.width!, height / img.height!);
-            img.set({
-                scaleX: scale,
-                scaleY: scale,
-                originX: 'center',
-                originY: 'center',
-                left: width / 2,
-                top: height / 2,
-                selectable: false, // Background shouldn't move
-                evented: false
-            });
-
-            canvas.add(img);
-            canvas.sendToBack(img);
-            // canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas)); // This often causes scaling issues, adding as object is safer for exact control
-        }, { crossOrigin: 'anonymous' });
-
-        setFabricCanvas(canvas);
-
-        return () => {
-            // Cleanup handled by ref change
-            // canvas.dispose(); 
-            // Note: React 18 strict mode + fabric dispose can be tricky.
-        };
-    }, [targetImage, width, height]); // Re-init if image changes
-
-    // Add Design Keywords
-    useEffect(() => {
-        if (!fabricCanvas || !targetKeywords || targetKeywords.length === 0) return;
-
-        // Remove existing text objects (keep images/bg)
-        fabricCanvas.getObjects().forEach((obj: any) => {
-            if (obj.type === 'text' || obj.type === 'group' || obj.type === 'i-text') {
-                // fabricCanvas.remove(obj);
-                // Careful not to remove background image we added as object
-            }
-        });
-
-        // Actually, for "Auto Layout", we might want to clear and re-add.
-        // But if user edited, we don't want to overwrite.
-        // Let's only add if canvas is "empty" of design elements?
-        // For V0, just add them.
-
-        targetKeywords.forEach((dk: DesignKeyword) => {
-            // Check if already added? No simple ID check in Fabric unless we set it.
-            addStyledText(fabricCanvas, dk);
-        });
-
-        fabricCanvas.renderAll();
-    }, [fabricCanvas, targetKeywords]);
-
     // Helper to add styled text
-    const addStyledText = (canvas: any, dk: DesignKeyword) => {
+    const addStyledText = useCallback((canvas: any, dk: DesignKeyword) => {
         const x = (dk.x || 0.5) * width;
         const y = (dk.y || 0.5) * height;
 
@@ -103,8 +32,8 @@ export const FabricLayer: React.FC<FabricLayerProps> = ({ width, height, imageUr
             fontSize: 24,
             fontWeight: 'bold',
             fill: '#ffffff',
-            originX: 'center',
-            originY: 'center'
+            originX: 'center' as const,
+            originY: 'center' as const
         };
 
         if (dk.style === 'badge') {
@@ -158,7 +87,80 @@ export const FabricLayer: React.FC<FabricLayerProps> = ({ width, height, imageUr
             });
             canvas.add(text.set({ left: x, top: y }));
         }
-    };
+    }, [width, height]);
+
+    // Initialize Canvas
+    useEffect(() => {
+        if (!canvasRef.current || !targetImage) return;
+
+        // Dispose previous canvas if exists
+        if (fabricCanvas) {
+            fabricCanvas.dispose();
+        }
+
+        const canvas = new fabric.Canvas(canvasRef.current, {
+            width: width,
+            height: height,
+            backgroundColor: '#f3f4f6'
+        });
+
+        // Load Background Image
+        // Load Background Image
+        fabric.Image.fromURL(targetImage, { crossOrigin: 'anonymous' }).then((img: any) => {
+            if (!img) return;
+
+            // Scale image to cover canvas (Contain logic)
+            const scale = Math.min(width / img.width!, height / img.height!);
+            img.set({
+                scaleX: scale,
+                scaleY: scale,
+                originX: 'center',
+                originY: 'center',
+                left: width / 2,
+                top: height / 2,
+                selectable: false, // Background shouldn't move
+                evented: false
+            });
+
+            canvas.add(img);
+            (canvas as any).sendObjectToBack(img);
+        });
+
+        setFabricCanvas(canvas);
+
+        return () => {
+            // Cleanup handled by ref change
+            // canvas.dispose(); 
+            // Note: React 18 strict mode + fabric dispose can be tricky.
+        };
+    }, [targetImage, width, height]); // Re-init if image changes
+
+    // Add Design Keywords
+    useEffect(() => {
+        if (!fabricCanvas || !targetKeywords || targetKeywords.length === 0) return;
+
+        // Remove existing text objects (keep images/bg)
+        fabricCanvas.getObjects().forEach((obj: any) => {
+            if (obj.type === 'text' || obj.type === 'group' || obj.type === 'i-text') {
+                // fabricCanvas.remove(obj);
+                // Careful not to remove background image we added as object
+            }
+        });
+
+        // Actually, for "Auto Layout", we might want to clear and re-add.
+        // But if user edited, we don't want to overwrite.
+        // Let's only add if canvas is "empty" of design elements?
+        // For V0, just add them.
+
+        targetKeywords.forEach((dk: DesignKeyword) => {
+            // Check if already added? No simple ID check in Fabric unless we set it.
+            addStyledText(fabricCanvas, dk);
+        });
+
+        fabricCanvas.renderAll();
+    }, [fabricCanvas, targetKeywords, addStyledText]);
+
+
 
     const handleDownload = () => {
         if (!fabricCanvas) return;

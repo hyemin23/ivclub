@@ -53,7 +53,7 @@ export const CompareSlider: React.FC<CompareSliderProps> = ({ before, after }) =
                     src={before}
                     alt="Before"
                     className="absolute inset-0 w-full h-full object-contain max-w-none"
-                    style={{ width: containerRef.current ? `${containerRef.current.offsetWidth}px` : '100%' }}
+                    style={{ width: containerRef.current ? `${containerRef.current.offsetWidth}px` : '100%' }} // eslint-disable-line
                 />
             </div>
 

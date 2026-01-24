@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { Resolution, AspectRatio } from '../types';
 import { STYLE_PRESETS } from '../services/detail/detail.constants';
 import { renderHighEndBlock } from '../services/detail/detail.fabric';
-import { generateDetailExtra } from '../services/geminiService';
+import { generateDetailExtra, extractFabricUSPs } from '../services/geminiService';
+import { getIconRuleSet } from '../services/detail/detail.rules'; // Fallback
 
 export const useDetailGenerator = () => {
     const [baseImage, setBaseImage] = useState<string | null>(null);
@@ -85,7 +86,21 @@ export const useDetailGenerator = () => {
                     { imageStrength: 0.25 }
                 );
 
-                const finalUrl = await renderHighEndBlock(aiGeneratedUrl, uspKeywords);
+                // 1. Generate USP with AI (Dynamic)
+                let finalUspData = [];
+                try {
+                    finalUspData = await extractFabricUSPs(baseImage);
+                } catch (e) {
+                    console.error("USP Gen failed, using fallback", e);
+                    finalUspData = getIconRuleSet(uspKeywords);
+                }
+
+                // Fallback if empty
+                if (!finalUspData || finalUspData.length === 0) {
+                    finalUspData = getIconRuleSet(uspKeywords);
+                }
+
+                const finalUrl = await renderHighEndBlock(aiGeneratedUrl, finalUspData, fabricText || "COTTON 100%");
                 setResultImages([finalUrl]);
             } else {
                 const promises = Array.from({ length: imageCount }, () =>

@@ -11,8 +11,24 @@ export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 
 
 export type FaceMode = 'ON' | 'OFF' | 'HEADLESS';
 export type Gender = 'Male' | 'Female' | 'UNSPECIFIED';
+
 export type Mode = 'Single' | 'Couple';
 export type CameraAngle = 'default' | 'front' | 'left-30' | 'left-40' | 'right-30' | 'right-40' | 'left-side' | 'right-side' | 'back';
+
+
+export type ToneManner = 'emotional' | 'functional' | 'trend' | 'witty' | 'polite' | string;
+
+export interface USPBlock {
+  title: string;
+  description: string;
+  icon?: string;
+}
+
+export interface FaceOptions {
+  faceMode: FaceMode;
+  gender: Gender;
+  faceRefImage: string | null;
+}
 
 export interface SavedModel {
   id: string;
@@ -25,7 +41,7 @@ export interface SavedModel {
   createdAt: number;
 }
 
-export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT' | 'DESIGN' | 'TYPOGRAPHY' | 'PIN' | 'VS' | 'ZOOM';
+export type BlockType = 'NOTICE' | 'INTRO' | 'PRODUCT' | 'DETAIL' | 'SIZE' | 'MODEL_INFO' | 'WASHING' | 'EVENT' | 'DESIGN' | 'TYPOGRAPHY' | 'PIN' | 'VS' | 'ZOOM' | 'MOOD' | 'SPLIT' | 'MAP';
 
 export interface PageBlock {
   id: string;
@@ -132,9 +148,12 @@ export interface ProductAnalysis {
   category: ProductCategory;
   fit: string;
   material: string;
-  materialType: MaterialType;
+  materialType?: MaterialType;
   season: string[];
   keyPoints: string[];
+  features?: string[];
+  color?: string;
+  style?: string;
   gender?: Gender;
 }
 
@@ -308,12 +327,6 @@ export interface AutoTypographyResult {
   visual_tag: string;
 }
 
-export interface DesignKeyword {
-  keyword: string;
-  style: 'badge' | 'simple_text' | 'speech_bubble' | 'arrow_text';
-  x?: number;
-  y?: number;
-}
 
 // ============================================
 // Benchmark (Vibe-Copy) Type
