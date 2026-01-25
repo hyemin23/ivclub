@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { Resolution, AspectRatio } from '../types';
 import { STYLE_PRESETS } from '../services/detail/detail.constants';
 import { renderHighEndBlock } from '../services/detail/detail.fabric';
-import { generateDetailExtra, extractFabricUSPs } from '../services/geminiService';
+import { generateDetailExtra, extractFabricUSPs, analyzeFabric, generateIconSpecs, generateDynamicCopy } from '../services/geminiService';
+import { renderSpecToSvg } from '../services/dsig/dsig.renderer';
 import { getIconRuleSet } from '../services/detail/detail.rules'; // Fallback
 
 export const useDetailGenerator = () => {
@@ -86,16 +87,45 @@ export const useDetailGenerator = () => {
                     { imageStrength: 0.25 }
                 );
 
-                // 1. Generate USP with AI (Dynamic)
+                // [Phase 3] DSIG v2.0 Pipeline
                 let finalUspData = [];
                 try {
-                    finalUspData = await extractFabricUSPs(baseImage);
+                    // 1. Vision Analysis
+                    const analysis = await analyzeFabric(baseImage);
+
+                    // 2. Determine Intents (Top 4 keywords)
+                    const intents = [...analysis.material, ...analysis.features, ...analysis.quality].slice(0, 4);
+                    if (intents.length === 0) intents.push("Quality", "Material", "Fit", "Detail"); // Fallback intents
+
+                    // 3. Generate Icon Specs & Copy in Parallel
+                    const [specs, copyData] = await Promise.all([
+                        generateIconSpecs(intents, ["minimalist", "thin-stroke", "round-cap"]),
+                        generateDynamicCopy(analysis, intents, Date.now())
+                    ]);
+
+                    // 4. Merge & Render
+                    finalUspData = specs.map((spec, idx) => {
+                        const copy = copyData[idx] || { title: intents[idx] || "Detail", desc: "Premium Quality" };
+                        const svgString = renderSpecToSvg(spec);
+                        const svgDataUri = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgString)}`;
+                        return {
+                            icon: svgDataUri,
+                            title: copy.title,
+                            desc: copy.desc
+                        };
+                    });
+
                 } catch (e) {
-                    console.error("USP Gen failed, using fallback", e);
-                    finalUspData = getIconRuleSet(uspKeywords);
+                    console.error("DSIG Pipeline failed, attempting legacy fallback", e);
+                    try {
+                        finalUspData = await extractFabricUSPs(baseImage);
+                    } catch (err2) {
+                        console.error("Legacy fallback failed", err2);
+                        finalUspData = getIconRuleSet(uspKeywords);
+                    }
                 }
 
-                // Fallback if empty
+                // Final Fallback
                 if (!finalUspData || finalUspData.length === 0) {
                     finalUspData = getIconRuleSet(uspKeywords);
                 }

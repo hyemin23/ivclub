@@ -9,6 +9,7 @@ import {
   generatePoseVariation,
   BACKGROUND_THEME_VARIATIONS
 } from "./imageService";
+import { IconSpec, FabricAnalysis } from './dsig/dsig.types';
 import {
   ProductCategory,
   ProductAnalysis,
@@ -223,7 +224,7 @@ export const extractProductSpecs = async (description: string): Promise<ProductS
   });
 };
 
-const urlToBase64 = async (url: string): Promise<string> => {
+export const urlToBase64 = async (url: string): Promise<string> => {
   if (url.startsWith('data:')) return url.split(',')[1];
   if (url.startsWith('http')) {
     const response = await fetch(url);
@@ -363,11 +364,30 @@ export const generateDetailExtra = async (
   parts.push(fileToPart(baseImage));
   if (refImage) parts.push(fileToPart(refImage));
 
-  const promptText = `Generate detailed fashion shot.
+  const isRoseCut = options?.isRoseCut;
+  const hasText = options?.hasText;
+
+  let promptText = `Generate detailed fashion shot.
     Prompt: ${prompt}.
     Resolution: ${resolution}.
     Ratio: ${aspectRatio}.
     Options: ${JSON.stringify(options || {})}`;
+
+  // [Phase 2] Rose-Cut v2.0 Logic
+  if (isRoseCut) {
+    promptText += `\n\n[ROSE-CUT GENERATION MODE]`;
+    if (hasText) {
+      // Case: With Text
+      promptText += `\n**TASK:** Generate a fabric texture background suitable for overlaying text.
+          **STYLE:** Elegant, high-end, clean center.
+          **POSITIVE:** Serif font overlay style, centered composition.`;
+    } else {
+      // Case: No Text (Pure Texture)
+      promptText += `\n**TASK:** Generate a pure, high-quality fabric texture close-up.
+          **NEGATIVE PROMPT:** text, watermark, logo, letters, signature, overlay, writing.
+          **POSITIVE:** pure fabric texture only, macro shot, detailed weave.`;
+    }
+  }
 
   const response = await generateContentSafe(promptText, parts, {
     taskType: 'CREATION'
@@ -476,32 +496,7 @@ export const generateFashionContent = async (config: any, prompt: string): Promi
   throw new Error("Failed to generate fashion content.");
 };
 
-export const generateAutoFitting = async (
-  productImg: string,
-  bgImg: string | null,
-  prompt: string,
-  angle: CameraAngle,
-  aspectRatio: AspectRatio,
-  resolution: Resolution,
-  isSideProfile: boolean,
-  signal?: AbortSignal
-): Promise<string> => {
-  // Note: signal is not fully supported in generateContentSafe yet, but we accept it to match signature.
-  const parts: any[] = [fileToPart(productImg)];
-  if (bgImg) parts.push(fileToPart(bgImg));
 
-  const promptText = `Auto fitting. Angle: ${angle}. Prompt: ${prompt}. SideProfile: ${isSideProfile}.`;
-
-  // We assume cancellation is handled at the caller level via signal check before/after await
-  const response = await generateContentSafe(promptText, parts, {
-    taskType: 'CREATION' // Note: signal ignored in safe wrapper
-  });
-
-  if (response.inlineData) {
-    return `data:${response.inlineData.mimeType};base64,${response.inlineData.data}`;
-  }
-  throw new Error("Failed to generate auto fitting.");
-};
 
 export const generatePoseChange = async (
   baseImage: string,
@@ -616,6 +611,115 @@ export const extractFabricUSPs = async (imageInput: string): Promise<any[]> => {
     const response = await ai.models.generateContent({
       model: 'gemini-1.5-flash',
       contents: [{ role: 'user', parts: [{ inlineData: { data: base64Data, mimeType: "image/jpeg" } }, { text: prompt }] }],
+      config: { responseMimeType: "application/json" }
+    });
+
+    return JSON.parse(response.text || "[]");
+  });
+};
+
+// --- DSIG (Dynamic Spec Icon Generator) v2.0 AI Services ---
+
+/**
+ * Phase 1-3: Vision Analysis
+ * Extracts material, texture, and quality keywords from the product image.
+ */
+export const analyzeFabric = async (imageInput: string): Promise<FabricAnalysis> => {
+  return retryOperation(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const base64Data = await urlToBase64(imageInput);
+
+    const prompt = `
+        Analyze this fashion product image for material properties.
+        Return STRICT JSON with the following arrays (max 3 items each):
+        - material: e.g., ["Cotton", "Denim", "Silk"]
+        - texture: e.g., ["Soft", "Rough", "Matte"]
+        - quality: e.g., ["Dense weave", "Clean finish"]
+        - features: e.g., ["Waterproof", "Stretchy"]
+        `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts: [{ inlineData: { data: base64Data, mimeType: "image/jpeg" } }, { text: prompt }] }],
+      config: { responseMimeType: "application/json" }
+    });
+
+    return JSON.parse(response.text || "{}") as FabricAnalysis;
+  });
+};
+
+/**
+ * Phase 1-4: Icon Spec Generation
+ * Generates JSON blueprints (IconSpec) based on intended meaning (intents).
+ */
+export const generateIconSpecs = async (intents: string[], styleTokens: string[]): Promise<IconSpec[]> => {
+  return retryOperation(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+
+    const prompt = `
+        [NanoBanana PRO MODE: DSIG v2.0]
+        You are an Icon Architect. Generate ${intents.length} minimalist mono-line icon specs.
+        
+        INTENTS: ${JSON.stringify(intents)}
+        STYLE: ${JSON.stringify(styleTokens)}
+        
+        CONSTRAINTS:
+        - Grid: 24x24
+        - Stroke: 2px, Cap: Round
+        - Shapes Only: path, circle, rect, line, polyline
+        - NO TEXT, NO SCRIPTS
+        
+        Return STRICT JSON Array of IconSpec objects:
+        [
+          {
+            "icon_id": "intent_name",
+            "shapes": [ { "type": "circle", "cx": 12, "cy": 12, "r": 10, ... } ]
+          },
+          ...
+        ]
+        `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview', // Use High Logic Model
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json" }
+    });
+
+    const specs = JSON.parse(response.text || "[]");
+    return Array.isArray(specs) ? specs : [];
+  });
+};
+
+/**
+ * Phase 2: Dynamic Copy Generation
+ * Generates Korean micro-copy for fashion icons based on analysis.
+ */
+export const generateDynamicCopy = async (analysis: FabricAnalysis, intents: string[], seed: number): Promise<any[]> => {
+  return retryOperation(async () => {
+    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    const prompt = `
+        [NanoBanana PRO MODE: Copywriter]
+        Generate Korean micro-copy for fashion icons. Return STRICT JSON.
+        
+        ANALYSIS: ${JSON.stringify(analysis)}
+        INTENTS: ${JSON.stringify(intents)}
+        SEED: ${seed}
+        
+        Rules: 
+        - Title <= 8 chars
+        - Desc <= 24 chars
+        - Vary wording based on seed.
+        
+        Output JSON: 
+        [ 
+            {"title": "...", "desc": "..."}, 
+            ... 
+        ]
+        `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash', // Flash is enough for copy
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: { responseMimeType: "application/json" }
     });
 

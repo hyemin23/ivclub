@@ -7,7 +7,7 @@ export type MaterialType = '코튼' | '데님' | '나일론' | '울' | '니트' 
 export type ViewMode = 'full' | 'top' | 'bottom';
 export type PageLength = '5' | '7' | '9' | 'auto';
 export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio' | 'color-variation' | 'batch-studio';
-export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change' | 'outfit-swap';
+export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change' | 'outfit-swap' | 'size-extract';
 
 export type FaceMode = 'ON' | 'OFF' | 'HEADLESS';
 export type Gender = 'Male' | 'Female' | 'UNSPECIFIED';

@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Layers, RefreshCw, UserCheck, Zap, PlusSquare, ImagePlus, Wallpaper, Eraser, Shirt } from 'lucide-react';
+import { Layers, RefreshCw, UserCheck, Zap, PlusSquare, ImagePlus, Wallpaper, Eraser, Shirt, Ruler } from 'lucide-react';
+import SizeGuideSystem from './SizeGuideSystem';
 import PoseChange from './PoseChange';
 import DetailExtra from './DetailExtra';
 import FittingVariation from './FittingVariation';
 import BackgroundChange from './BackgroundChange';
-import OutfitSwap from './OutfitSwap'; // Added
+
 import dynamic from 'next/dynamic';
 
 const SmartFittingRoom = dynamic(() => import('./SmartFittingRoom'), {
@@ -22,9 +23,10 @@ const FitBuilder: React.FC = () => {
     { id: 'pose-change', name: '포즈 변경', icon: <RefreshCw className="w-4 h-4" /> },
     { id: 'fitting-variation', name: '피팅 베리에이션', icon: <ImagePlus className="w-4 h-4" /> },
     { id: 'detail-extra', name: '디테일 컷 추출', icon: <PlusSquare className="w-4 h-4" /> },
-    { id: 'outfit-swap', name: '의상 교체', icon: <Shirt className="w-4 h-4" /> }, // Added
+
     { id: 'background-change', name: '배경 교체', icon: <Wallpaper className="w-4 h-4" /> },
     { id: 'virtual-try-on', name: '스마트 피팅 (Beta)', icon: <UserCheck className="w-4 h-4" /> },
+    { id: 'size-extract', name: '사이즈 추출 (Auto)', icon: <Ruler className="w-4 h-4" /> },
   ];
 
   return (
@@ -52,8 +54,14 @@ const FitBuilder: React.FC = () => {
         {subMode === 'fitting-variation' && <FittingVariation />}
         {subMode === 'background-change' && <BackgroundChange />}
         {subMode === 'detail-extra' && <DetailExtra />}
-        {subMode === 'outfit-swap' && <OutfitSwap />}
+
         {subMode === 'virtual-try-on' && <SmartFittingRoom />}
+        {subMode === 'size-extract' && (
+          <div className="bg-white rounded-2xl p-6">
+            <h3 className="text-sm font-bold text-gray-900 mb-4">사이즈 가이드 (Auto Extract)</h3>
+            <SizeGuideSystem />
+          </div>
+        )}
       </div>
     </div>
   );

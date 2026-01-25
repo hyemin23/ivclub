@@ -48,7 +48,7 @@ export const OutfitResult: React.FC<OutfitResultProps> = ({
                             {/* Comparison View */}
                             <div className="flex-1 relative rounded-xl overflow-hidden border border-slate-800">
                                 <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded text-[10px] font-bold text-white z-10">BEFORE</div>
-                                <img src={baseImage || ''} alt="Base" className="w-full h-full object-contain opacity-50 grayscale" />
+                                {baseImage && <img src={baseImage} alt="Base" className="w-full h-full object-contain opacity-50 grayscale" />}
                             </div>
                             <div
                                 className="flex-[1.5] relative rounded-xl overflow-hidden border border-indigo-500/50 shadow-lg shadow-indigo-500/10 group cursor-zoom-in"

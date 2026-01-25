@@ -64,6 +64,7 @@ interface AppStore extends ProductState {
   removeSizeRow: (id: string) => void;
   updateSizeRow: (id: string, name: string, data: Record<string, string>) => void;
   setSizeTable: (table: SizeRecord[]) => void;
+  setSizeData: (columns: SizeColumn[], table: SizeRecord[]) => void;
 
   addSizeColumn: () => void;
   removeSizeColumn: (id: string) => void;
@@ -152,7 +153,7 @@ interface AppStore extends ProductState {
   setActiveModelId: (id: string | null) => void;
 }
 
-const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks' | 'setSelectedBlockId' | 'setActiveTab' | 'setDesignKeywords' | 'setComparisons' | 'setUploadedImages' | 'setProductNameInput' | 'setMainImageUrl' | 'setSmartPins' | 'setCopyAnalysis' | 'addVideoLog' | 'updateVideoLog' | 'setActiveVideoLogId' | 'addToBackgroundHistory' | 'clearBackgroundHistory' | 'addSavedModel' | 'removeSavedModel' | 'updateSavedModel' | 'setActiveModelId'> = {
+const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSizeData' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks' | 'setSelectedBlockId' | 'setActiveTab' | 'setDesignKeywords' | 'setComparisons' | 'setUploadedImages' | 'setProductNameInput' | 'setMainImageUrl' | 'setSmartPins' | 'setCopyAnalysis' | 'addVideoLog' | 'updateVideoLog' | 'setActiveVideoLogId' | 'addToBackgroundHistory' | 'clearBackgroundHistory' | 'addSavedModel' | 'removeSavedModel' | 'updateSavedModel' | 'setActiveModelId'> = {
   credits: 0,
   user: null, // Supabase User
   brandName: 'NEW BRAND',
@@ -312,6 +313,7 @@ export const useStore = create<AppStore>()(
         sizeTable: state.sizeTable.map(r => r.id === id ? { ...r, name, ...data } : r)
       })),
       setSizeTable: (table) => set({ sizeTable: table }),
+      setSizeData: (columns, table) => set({ sizeColumns: columns, sizeTable: table }),
 
       // Column Actions Implementation
       addSizeColumn: () => set((state) => {

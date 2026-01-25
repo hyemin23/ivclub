@@ -14,12 +14,19 @@ const getApiKey = () => {
 };
 
 // 🛡️ Safety Settings
-const SAFETY_SETTINGS_BLOCK_NONE: SafetySetting[] = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-  { category: HarmCategory.HARM_CATEGORY_CIVIC_INTEGRITY, threshold: HarmBlockThreshold.BLOCK_NONE },
+// 🛡️ Safety Settings (Updated)
+const SAFETY_SETTINGS_DEV: SafetySetting[] = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+];
+
+const SAFETY_SETTINGS_PROD: SafetySetting[] = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ];
 
 // 🚫 Tool Use Disable
@@ -29,20 +36,17 @@ const TOOL_CONFIG_NONE: ToolConfig = {
 
 // 🏗️ Model Constants & Fallback Lists
 export const GEMINI_MODELS = {
-  HIGH_QUALITY: "gemini-3-pro-preview",
-  IMAGE_GEN: "gemini-3-pro-image-preview",
-  EDIT_STABLE: "gemini-2.0-flash-exp-image-generation", // 🛠️ Experimental Image Gen Model for Editing
-  LOGIC_REASONING: "gemini-3-pro-preview", // 🧠 Use Pro for Logic/Audit
+  HIGH_QUALITY: "models/nano-banana-pro-preview", // Nano Banana Pro
+  IMAGE_GEN: "models/nano-banana-pro-preview", // Primary Image Gen
+  EDIT_STABLE: "models/gemini-2.5-flash-image", // Secondary
+  LOGIC_REASONING: "gemini-1.5-pro", // Logic
 };
 
-// 🚨 [Corrected] Confirmed Active Models (Jan 2026)
+// 🚨 [Corrected] Confirmed Active Models (Nano Banana Pro Release)
 const MODEL_FALLBACK_LIST = [
-  "gemini-3-pro-image-preview", // 🏆 1st: Nano Banana Pro
-  "gemini-2.0-flash-exp-image-generation", // 🥈 2nd: Experimental Image Gen
-  "gemini-2.5-flash-image",    // 🥉 3rd: Nano Banana (Flash)
-  "gemini-3-pro-preview",       // 4th: Logic Pro
-  "gemini-2.5-pro",             // 5th: Stable Backup
-  "gemini-2.5-flash"            // 6th: Speed/Fallback
+  "models/nano-banana-pro-preview",       // 🏆 1st: Primary
+  "models/gemini-2.5-flash-image",        // 🥈 2nd: Stable Secondary
+  "models/gemini-2.0-flash-exp-image-generation" // 🥉 3rd: Experimental
 ];
 
 const FALLBACK_STRATEGIES = {
@@ -50,10 +54,10 @@ const FALLBACK_STRATEGIES = {
   EDIT: MODEL_FALLBACK_LIST,
 
   // Text/Analysis: Can start with Logic Pro
-  TEXT: ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash"],
+  TEXT: ["gemini-1.5-pro", "gemini-1.5-flash"],
 
   // Image Creation: Explicitly use Image Specialist + Fallbacks
-  CREATION: ["gemini-3-pro-image-preview", "gemini-2.0-flash-exp-image-generation", "gemini-2.5-flash-image"],
+  CREATION: ["models/nano-banana-pro-preview", "models/gemini-2.5-flash-image"],
 };
 
 export interface GeminiResponse {
@@ -65,8 +69,78 @@ export interface GeminiResponse {
   usedModel: string;
 }
 
+// 🕵️ Robust Image Extractor (Final Dev Spec)
+export type Extracted =
+  | { type: "image"; dataUrl: string; mimeType: string }
+  | { type: "text"; text: string }
+  | { type: "blocked"; reason: string; meta?: any };
+
+export function extractResult(response: any): Extracted {
+  // 0) 후보 자체가 없는 케이스 (빈 깡통)
+  const candidate = response?.candidates?.[0];
+  const promptFeedback = response?.promptFeedback;
+
+  // 0-a) promptFeedback 기반 차단 감지
+  const blockReason = promptFeedback?.blockReason || promptFeedback?.blockReasonMessage;
+  if (blockReason) {
+    return { type: "blocked", reason: `PROMPT_BLOCKED: ${blockReason}`, meta: { promptFeedback } };
+  }
+
+  if (!candidate) {
+    return { type: "blocked", reason: "NO_CANDIDATE_RETURNED", meta: { response } };
+  }
+
+  // 0-b) finishReason 체크 (SAFETY 등)
+  const finishReason = candidate?.finishReason;
+  if (finishReason && finishReason !== "STOP") {
+    if (finishReason === "SAFETY") {
+      return {
+        type: "blocked",
+        reason: "BLOCKED_BY_SAFETY",
+        meta: { finishReason, safetyRatings: candidate?.safetyRatings, promptFeedback },
+      };
+    }
+    // 다른 이유도 메타로 반환
+    return {
+      type: "blocked",
+      reason: `MODEL_STOPPED: ${finishReason}`,
+      meta: { finishReason, safetyRatings: candidate?.safetyRatings, promptFeedback },
+    };
+  }
+
+  const parts = candidate?.content?.parts ?? [];
+
+  // 1) 이미지 우선
+  const img = parts.find((p: any) => p.inlineData?.data && (p.inlineData?.mimeType || "").startsWith("image/"));
+  if (img) {
+    const mimeType = img.inlineData.mimeType || "image/jpeg";
+    return { type: "image", mimeType, dataUrl: `data:${mimeType};base64,${img.inlineData.data}` };
+  }
+
+  // 2) 텍스트
+  const txt = parts.map((p: any) => p.text).filter(Boolean).join("\n").trim();
+  if (txt) return { type: "text", text: txt };
+
+  // 3) 아무 것도 없음: 운영에서 가장 싫은 케이스 -> 메타 포함해서 blocked 처리
+  return {
+    type: "blocked",
+    reason: "EMPTY_PARTS_WITH_STOP",
+    meta: { finishReason, safetyRatings: candidate?.safetyRatings, promptFeedback, candidate },
+  };
+}
+
 /**
  * 🛠️ Universal Gemini Client with Fallback & Retry
+ */
+// Helper: Sanitize Prompt for Safety
+const sanitizePromptForRoseCut = (prompt: string): string => {
+  const safeSuffix = ", fabric macro shot only, no human, no body, no skin, no face, no nude";
+  if (prompt.includes("no human")) return prompt;
+  return prompt + safeSuffix;
+};
+
+/**
+ * 🛠️ Universal Gemini Client with Fallback & Smart Retry (v1.0 Reliability)
  */
 export async function generateContentSafe(
   prompt: string,
@@ -89,84 +163,124 @@ export async function generateContentSafe(
   if (options.model) {
     modelList = [options.model, ...modelList.filter(m => m !== options.model)];
   }
-
   // Deduplicate
   modelList = Array.from(new Set(modelList));
 
   let lastError: any = null;
+  const isProd = process.env.NODE_ENV === 'production';
+  const safetySettings = isProd ? SAFETY_SETTINGS_PROD : SAFETY_SETTINGS_DEV;
 
   for (const modelName of modelList) {
-    // 🔁 Retry Loop for Transient Errors (503/429)
+    // 🔁 Smart Retry Loop
+    // Attempt 0: Standard
+    // Attempt 1: Sanitize Prompt + Lower Temp (if safety blocked)
     let retryCount = 0;
-    const maxRetries = 2; // Try same model up to 3 times total
+    const maxRetries = 1; // 1 Retry per model (Standard -> Sanitized)
 
     while (retryCount <= maxRetries) {
       try {
-        console.log(`🤖 Model Attempt: ${modelName} (${options.taskType}) ${retryCount > 0 ? `(Retry ${retryCount})` : ''}`);
+        const isRetry = retryCount > 0;
+        console.log(`🤖 Model Attempt: ${modelName} (${options.taskType}) ${isRetry ? `(Smart Retry - Sanitized)` : ''}`);
+
+        let currentPrompt = prompt;
+        let currentConfig = { ...options.config };
+
+        // Apply Smart Retry Logic (Sanitization)
+        if (isRetry && options.taskType === 'CREATION') {
+          currentPrompt = sanitizePromptForRoseCut(prompt);
+          // Lower temperature to be more deterministic/safe
+          if (!currentConfig.generationConfig) currentConfig.generationConfig = {};
+          currentConfig.generationConfig.temperature = 0.4;
+        }
 
         const requestConfig = {
           model: modelName,
           contents: {
             parts: [
-              { text: prompt },
+              { text: currentPrompt },
               ...parts
             ]
           },
           config: {
-            safetySettings: SAFETY_SETTINGS_BLOCK_NONE,
+            safetySettings: safetySettings,
             toolConfig: TOOL_CONFIG_NONE,
-            ...(options.config || {})
+            ...currentConfig
           }
         };
+
+        // Remove responseMimeType for Image Generation (as per spec)
+        if (options.taskType === 'CREATION' || options.taskType === 'EDIT') {
+          if (requestConfig.config?.responseMimeType === 'application/json') {
+            // Keep JSON if explicitly requested? 
+            // Spec says: "generateContent calls for image ... responseMimeType: application/json absolute NO"
+            // But wait, some functions in geminiService might set it.
+            // We should probably respect it if the user passed it, BUT warning:
+            // "Image generation requests should NOT use json mime type".
+            // Let's assume the caller handles this or we strip it if it's image gen?
+            // Let's safe-guard:
+            delete requestConfig.config.responseMimeType;
+          }
+        }
 
         // @ts-ignore
         const result = await ai.models.generateContent(requestConfig);
 
-        // Handle Image Response (inlineData)
-        const imagePart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData);
-        if (imagePart?.inlineData?.data) {
+        // 🛡️ Robust Parsing
+        const extracted = extractResult(result);
+
+        // 1. BLOCKED Handling
+        if (extracted.type === 'blocked') {
+          console.warn(`🛡️ BLOCKED (${extracted.reason}) on ${modelName}`, extracted.meta);
+          // Throw specific error to trigger Smart Retry
+          throw new Error(extracted.reason); // "BLOCKED_BY_SAFETY", "EMPTY_PARTS_WITH_STOP", etc.
+        }
+
+        // 2. TEXT Handling (for Image Task)
+        if (extracted.type === 'text') {
+          if (options.taskType === 'CREATION' || options.taskType === 'EDIT') {
+            console.warn(`⚠️ Text received for Image Task: ${extracted.text.substring(0, 50)}...`);
+            // Treat as failure for Image Gen? 
+            // Spec says: "RC-1) Model returns text instead of image".
+            // We should probably treat this as a failure and retry if we strictly need an image.
+            // However, `GeminiResponse` supports text. The caller might handle it.
+            // But `extracted.type` differentiates. 
+            // Let's return text as is, but log warning.
+          }
+          return { text: extracted.text, usedModel: modelName };
+        }
+
+        // 3. IMAGE Handling
+        if (extracted.type === 'image') {
           console.log(`✅ Generation Success! (Used: ${modelName})`);
           return {
             inlineData: {
-              data: imagePart.inlineData.data,
-              mimeType: imagePart.inlineData.mimeType || 'image/png'
+              data: extracted.dataUrl.split(',')[1], // Remove prefix for consistency with old interface
+              mimeType: extracted.mimeType
             },
             usedModel: modelName
           };
         }
 
-        // Handle Text Response
-        const textPart = result.candidates?.[0]?.content?.parts?.find((p: any) => p.text);
-        if (textPart?.text) {
-          console.log(`✅ Generation Success! (Used: ${modelName})`);
-          return {
-            text: textPart.text,
-            usedModel: modelName
-          };
-        }
-
-        // If we get here, it's an empty response but NOT an error throw.
-        // We treat it as failure and try next model, no retry needed.
-        throw new Error("Empty response from AI (No Text/Image)");
+        throw new Error("UNREACHABLE_CODE");
 
       } catch (error: any) {
-        console.warn(`⚠️ ${modelName} Failed. Reason:`, error.message);
+        console.warn(`⚠️ ${modelName} Failed (Attempt ${retryCount}). Reason:`, error.message);
         lastError = error;
 
-        const isTransient = error.message.includes('503') || error.message.includes('429') || error.message.includes('overloaded');
+        // Check Retry Eligibility
+        const isSafetyRelated =
+          error.message.includes('SAFETY') ||
+          error.message.includes('BLOCKED') ||
+          error.message.includes('EMPTY'); // Empty often means filtered
 
-        if (isTransient) {
-          if (retryCount < maxRetries) {
-            console.log(`⏳ Server overloaded (503). Retrying ${modelName} in 1s...`);
-            await new Promise(r => setTimeout(r, 1000)); // Wait 1s before retry (reduced from 2s)
-            retryCount++;
-            continue; // Retry ONLY same model
-          } else {
-            console.log(`❌ ${modelName} overloaded after ${maxRetries} retries. Moving to next model...`);
-          }
+        if (isSafetyRelated && retryCount < maxRetries) {
+          console.log(`♻️ Triggering Smart Retry (Sanitizing Prompt...)`);
+          retryCount++;
+          continue;
         }
 
-        // If not transient (e.g. 400 Bad Request, 404), or max retries exceeded, break inner loop to try next model
+        // If not safety related (e.g. 500 error), or max retries reached, 
+        // break to try NEXT MODEL.
         break;
       }
     }

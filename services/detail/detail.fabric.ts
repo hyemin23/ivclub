@@ -88,7 +88,8 @@ export const renderHighEndBlock = async (imageUrl: string, uspData: any[], overl
         const iconCenterX = (colWidth * i) + (colWidth / 2);
 
         // 1. 아이콘
-        const iconUrl = getIconSvgUrl(item.icon);
+        // 1. 아이콘
+        const iconUrl = item.icon.startsWith('data:') ? item.icon : getIconSvgUrl(item.icon);
         const iconImg = await (FabricImage as any).fromURL(iconUrl);
         // Relative Icon Size
         const iconSize = BASE_SIZE * 0.06;

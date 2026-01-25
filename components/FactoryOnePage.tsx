@@ -17,7 +17,7 @@ import { LayerManager } from './LayerManager';
 import { SortableLookbookItem } from './SortableLookbookItem';
 import ExportableContent from './ExportableContent'; // Added
 import dynamic from 'next/dynamic';
-import OutfitSwap from './OutfitSwap'; // Added
+
 
 const SmartBlockEditor = dynamic(() => import('./SmartBlockEditor'), {
     loading: () => <div className="h-full flex items-center justify-center text-slate-500">에디터 로딩중...</div>,
@@ -59,7 +59,7 @@ const FactoryOnePage: React.FC = () => {
     const exportRef = useRef<HTMLDivElement>(null);
 
     // Local state for sidebar inputs (mirroring store for immediate editing)
-    const [activeTab, setActiveTab] = useState<'content' | 'design' | 'export'>('content');
+    const [activeTab, setActiveTab] = useState<'content' | 'design' | 'size' | 'export'>('content');
     const [smartBuilderTab, setSmartBuilderTab] = useState<'pose' | 'fitting' | 'detail' | 'outfit' | 'autofit'>('pose'); // Added outfit
     const [mobileView, setMobileView] = useState<'editor' | 'preview'>('editor'); // New mobile view state
     const [isGeneraring, setIsGenerating] = useState(false);
@@ -418,7 +418,7 @@ const FactoryOnePage: React.FC = () => {
 
                 {/* Console Tabs */}
                 <div className="flex p-1 bg-slate-950 rounded-xl mb-4">
-                    {['content', 'design', 'export'].map((t) => (
+                    {['content', 'design', 'size', 'export'].map((t) => (
                         <button
                             key={t}
                             onClick={() => setActiveTab(t as any)}
@@ -478,6 +478,15 @@ const FactoryOnePage: React.FC = () => {
                         {/* Brand Assets Manager (Embedded) */}
                         <div className="p-4 bg-slate-950 rounded-xl border border-white/5">
                             <BrandAssetManager />
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'size' && (
+                    <div className="space-y-6">
+                        <div className="p-1">
+                            <h3 className="text-sm font-bold text-white mb-4">사이즈 가이드 (Auto Extract)</h3>
+                            <SizeGuideSystem />
                         </div>
                     </div>
                 )}

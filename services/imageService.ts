@@ -289,7 +289,10 @@ export const generatePoseVariation = async (
 
   const result = await generateContentSafe(variationPrompt, [fileToPart(currentResultImage)], {
     taskType: 'EDIT',
-    model: GEMINI_MODELS.EDIT_STABLE
+    model: GEMINI_MODELS.EDIT_STABLE,
+    config: {
+      responseModalities: ["IMAGE"]
+    }
   });
 
   if (result.inlineData) return `data:${result.inlineData.mimeType};base64,${result.inlineData.data}`;

@@ -17,10 +17,7 @@ const FitBuilder = dynamic(() => import('@/components/FitBuilder'), {
   loading: () => <div className="p-12 text-center text-gray-500">Loading Builder...</div>,
   ssr: false
 });
-const AutoFitting = dynamic(() => import('@/components/AutoFitting'), {
-  loading: () => <div className="p-12 text-center text-gray-500">Loading Auto Fitting...</div>,
-  ssr: false
-});
+
 const UGCMaster = dynamic(() => import('@/components/UGCMaster'), {
   loading: () => <div className="p-12 text-center text-gray-500">Loading UGC Master...</div>,
   ssr: false
@@ -81,13 +78,7 @@ const Page: React.FC = () => {
           description: '정밀 이미지 편집',
           view: 'fit-builder' as const
         },
-        {
-          id: 'auto-fitting',
-          name: '자동 피팅',
-          icon: <Users className="w-5 h-5" />,
-          description: '배경/각도 일괄 생성',
-          view: 'auto-fitting' as const
-        },
+
         {
           id: 'color-variation',
           name: 'AI 컬러 변경',
@@ -278,7 +269,7 @@ const Page: React.FC = () => {
                 {appView === 'ugc-master' && 'UGC 마스터'}
                 {appView === 'factory' && '상페 AI 팩토리'}
                 {appView === 'fit-builder' && '스마트 빌더'}
-                {appView === 'auto-fitting' && '자동 피팅'}
+
                 {appView === 'color-variation' && 'AI PIGMENT STUDIO'}
                 {appView === 'thumbnail-generator' && '썸네일 & 코디 생성기'}
                 {appView === 'settings' && '시스템 설정'}
@@ -287,7 +278,7 @@ const Page: React.FC = () => {
                 {appView === 'ugc-master' && '아이폰 4K RAW 결과물과 동일한 질감의 소셜 전용 실사 패션 콘텐츠를 생성합니다.'}
                 {appView === 'factory' && '지능형 분석과 일괄 생성을 통해 커머스에 최적화된 룩북을 제작합니다.'}
                 {appView === 'fit-builder' && '포즈 변경, 배경 합성, 디테일 컷 추출 등 정교한 개별 편집 기능을 제공합니다.'}
-                {appView === 'auto-fitting' && '상품과 배경을 결합하여 다양한 각도의 피팅 이미지를 일괄 생성합니다.'}
+
                 {appView === 'thumbnail-generator' && '자사몰/오픈마켓 썸네일과 쇼핑 앱 전용 코디(전신) 이미지를 규격에 맞춰 생성합니다.'}
                 {appView === 'settings' && '시스템 구성 및 API 상태를 관리합니다.'}
                 {appView === 'color-variation' && '원단 질감과 조명을 완벽하게 보존하며 오직 색상만 변경합니다. (Texture Lock Engine)'}
@@ -318,7 +309,7 @@ const Page: React.FC = () => {
             {appView === 'ugc-master' && <UGCMaster />}
             {appView === 'factory' && <FactoryOnePage />}
             {appView === 'fit-builder' && <FitBuilder />}
-            {appView === 'auto-fitting' && <AutoFitting />}
+
             {appView === 'thumbnail-generator' && <ThumbnailGenerator />}
             {appView === 'admin' && <AdminKeyManager />}
             {appView === 'canvas-editor' && <CanvasEditor />}
