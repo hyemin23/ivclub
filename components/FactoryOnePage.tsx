@@ -54,6 +54,7 @@ const uuidv4 = () => {
     });
 };
 
+
 const FactoryOnePage: React.FC = () => {
     const store = useStore();
     const exportRef = useRef<HTMLDivElement>(null);
@@ -525,6 +526,7 @@ const FactoryOnePage: React.FC = () => {
                         </button>
                     </div>
                 )}
+
             </div>
 
             {/* --- Main Preview Area --- */}

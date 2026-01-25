@@ -65,6 +65,7 @@ Focus on the pants only:
 - Crop from waist to shoes
 - Center the thighs, knees, and hemline clearly
 - Maintain the original fit, color, and fabric texture of the pants with no color shift
+- **CRITICAL: DO NOT CHANGE THE CLOTHING COLOR. KEEP ORIGINAL PIGMENTS EXACT.**
 - Natural standing pose, slight leg separation for clear silhouette
 - Shoes fully visible and grounded on the floor
 
@@ -83,6 +84,8 @@ Composition:
     if (options?.faceOptions?.isWideFit) {
       finalPrompt += `\nIMPORTANT OVERRIDE:\n- Ensure wide silhouette is fully visible without cropping the outer leg lines.\n- Avoid perspective distortion. Keep the leg lines straight and wide.`;
     }
+    // Universal Color Lock for Studio
+    finalPrompt += `\n**FINAL TEXTURE CHECK:** The clothing texture and color must remain 100% identical to the source. No lighting artifacts altering the pigment.`;
   } else if (preset === 'MZ_CAFE') {
     finalPrompt = `
 [NanoBanana PRO MODE: K-MODERN CLEAN STREET]

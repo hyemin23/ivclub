@@ -5,6 +5,8 @@ import { Sparkles, Download, ImageIcon, RefreshCw, X, Monitor, Layers, Wallpaper
 import { toast } from 'sonner';
 import { replaceBackground, generateBackgroundVariations, generatePoseVariation, applyBenchmarkStyle } from '../services/imageService';
 import { Resolution, AspectRatio, FaceMode, Gender, SavedModel, BenchmarkAnalysisResult } from '../types';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import { BenchmarkUploader } from './BenchmarkUploader';
 import { ImageModal } from './ImageModal';
 import { ConfirmModal } from './ConfirmModal';
@@ -15,7 +17,7 @@ import { useStore, BackgroundHistoryItem } from '../store';
 const BackgroundChange: React.FC = () => {
   const [baseImage, setBaseImage] = useState<string | null>(null);
   const [bgRefImage, setBgRefImage] = useState<string | null>(null);
-  
+
   // Benchmark State
   const [benchmarkAnalysis, setBenchmarkAnalysis] = useState<BenchmarkAnalysisResult | null>(null);
 
@@ -23,7 +25,7 @@ const BackgroundChange: React.FC = () => {
   const [resolution, setResolution] = useState<Resolution>('2K');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [imageCount, setImageCount] = useState<number>(1);
-  const [ambientMatch, setAmbientMatch] = useState(false);
+  const [ambientMatch, setAmbientMatch] = useState(true); // Default ON
   const [ambientStrength, setAmbientStrength] = useState(50);
 
   interface ResultItem {
@@ -45,7 +47,7 @@ const BackgroundChange: React.FC = () => {
   // Store for History & Saved Models
   const {
     backgroundHistory, addToBackgroundHistory, clearBackgroundHistory,
-    savedModels, activeModelId, addSavedModel, removeSavedModel, setActiveModelId
+    savedModels, activeModelId, setActiveModelId // Keep hooks for now to avoid breaking heavy refactor, but unused UI
   } = useStore();
 
   const handleStopClick = useCallback(() => {
@@ -106,26 +108,9 @@ const BackgroundChange: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'STUDIO' | 'HOTPLACE' | 'CUSTOM' | 'BENCHMARK'>('STUDIO');
   const [isWideFit, setIsWideFit] = useState(false);
   const [category, setCategory] = useState<'TOP' | 'BOTTOM' | 'SET'>('SET');
-  const [isStyleReference, setIsStyleReference] = useState(false);
+  const [isStyleReference, setIsStyleReference] = useState(true); // Default ON
 
-  const handleSaveModel = (url: string) => {
-    const name = window.prompt(`모델의 이름을 입력해주세요 (예: 전속모델 A)`, `전속모델 ${savedModels.length + 1}`);
-    if (!name) return;
 
-    const description = window.prompt("모델의 외모 특징을 입력해주세요 (예: 20대 한국 남성, 시크한 눈빛)", "한국인 모델");
-
-    const newModel: SavedModel = {
-      id: Date.now().toString(),
-      name,
-      description: description || "Korean Model",
-      gender: 'UNSPECIFIED',
-      previewUrl: url,
-      faceRefImage: url,
-      createdAt: Date.now()
-    };
-    addSavedModel(newModel);
-    toast.success("전속 모델 라이브러리에 저장되었습니다!");
-  };
 
 
   const handleImageUpdate = (newUrl: string) => {
@@ -277,7 +262,7 @@ const BackgroundChange: React.FC = () => {
   const handleBenchmarkApply = async () => {
     if (!baseImage || !benchmarkAnalysis) return;
     setIsLoading(true);
-    
+
     // Initialize placeholders
     const placeholders: ResultItem[] = Array(imageCount).fill(null).map((_, i) => ({
       id: `benchmark-${i}`, url: null, status: 'loading'
@@ -290,65 +275,85 @@ const BackgroundChange: React.FC = () => {
     const signal = abortControllerRef.current.signal;
 
     try {
-        let completed = 0;
-        const promises = Array(imageCount).fill(null).map(async (_, index) => {
-            if (signal.aborted) return;
-            try {
-                if (index === 0) setProgressText(`Vibe Transfer 진행 중... (0/${imageCount})`);
-                
-                const url = await applyBenchmarkStyle(
-                    baseImage,
-                    benchmarkAnalysis,
-                    resolution,
-                    aspectRatio
-                );
+      let completed = 0;
+      const promises = Array(imageCount).fill(null).map(async (_, index) => {
+        if (signal.aborted) return;
+        try {
+          if (index === 0) setProgressText(`Vibe Transfer 진행 중... (0/${imageCount})`);
 
-                if (!signal.aborted && url) {
-                    setResultImages(prev => prev.map((item, i) => 
-                        i === index ? { ...item, url, status: 'success' } : item
-                    ));
-                    addToBackgroundHistory(url);
-                }
-            } catch (err: any) {
-                console.error("Benchmark Failed:", err);
-                if (!signal.aborted) {
-                    setResultImages(prev => prev.map((item, i) => 
-                        i === index ? { ...item, status: 'error' } : item
-                    ));
-                }
-            } finally {
-                if (!signal.aborted) {
-                    completed++;
-                    setProgress(Math.round((completed / imageCount) * 100));
-                }
-            }
-        });
+          const url = await applyBenchmarkStyle(
+            baseImage,
+            benchmarkAnalysis,
+            resolution,
+            aspectRatio
+          );
 
-        await Promise.all(promises);
+          if (!signal.aborted && url) {
+            setResultImages(prev => prev.map((item, i) =>
+              i === index ? { ...item, url, status: 'success' } : item
+            ));
+            addToBackgroundHistory(url);
+          }
+        } catch (err: any) {
+          console.error("Benchmark Failed:", err);
+          if (!signal.aborted) {
+            setResultImages(prev => prev.map((item, i) =>
+              i === index ? { ...item, status: 'error' } : item
+            ));
+          }
+        } finally {
+          if (!signal.aborted) {
+            completed++;
+            setProgress(Math.round((completed / imageCount) * 100));
+          }
+        }
+      });
+
+      await Promise.all(promises);
 
     } catch (error: any) {
-        console.error(error);
-        toast.error("벤치마킹 생성 중 오류가 발생했습니다.");
+      console.error(error);
+      toast.error("벤치마킹 생성 중 오류가 발생했습니다.");
     } finally {
-        if (!signal.aborted) {
-            setIsLoading(false);
-            setProgress(0);
-            setProgressText('');
-            abortControllerRef.current = null;
-        }
+      if (!signal.aborted) {
+        setIsLoading(false);
+        setProgress(0);
+        setProgressText('');
+        abortControllerRef.current = null;
+      }
     }
   };
 
   const handleDownloadAll = async () => {
+    const zip = new JSZip();
+    let count = 0;
+
     for (let i = 0; i < resultImages.length; i++) {
-      if (!resultImages[i].url) continue;
-      const link = document.createElement('a');
-      link.href = resultImages[i].url!;
-      link.download = `background_${i + 1}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      await new Promise(resolve => setTimeout(resolve, 300));
+      const img = resultImages[i];
+      if (img.url) {
+        try {
+          // Fetch the image data to blob
+          const response = await fetch(img.url);
+          const blob = await response.blob();
+          zip.file(`background_${i + 1}.png`, blob);
+          count++;
+        } catch (e) {
+          console.error("Failed to add image to zip", e);
+        }
+      }
+    }
+
+    if (count === 0) {
+      toast.error("다운로드할 이미지가 없습니다.");
+      return;
+    }
+
+    try {
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `nano_backgrounds_${Date.now()}.zip`);
+      toast.success(`${count}장의 이미지를 압축하여 저장했습니다.`);
+    } catch (e) {
+      toast.error("압축 저장 중 오류가 발생했습니다.");
     }
   };
 
@@ -396,64 +401,7 @@ const BackgroundChange: React.FC = () => {
           </div>
 
 
-          {/* [NEW] Model Persona Selector */}
-          <div className="mb-8 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <UserCircle className="w-4 h-4 text-indigo-400" />
-                <label className="text-xs font-bold text-indigo-300 uppercase tracking-widest">Model Persona (전속모델)</label>
-              </div>
-              {activeModelId && (
-                <button onClick={() => setActiveModelId(null)} className="text-[10px] text-red-400 hover:text-red-300">
-                  초기화 (Reset)
-                </button>
-              )}
-            </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide snap-x">
-              {/* Default / None */}
-              <div
-                onClick={() => setActiveModelId(null)}
-                className={`flex-shrink-0 w-16 h-16 rounded-full border-2 flex flex-col items-center justify-center cursor-pointer transition-all snap-center ${!activeModelId ? 'border-white bg-white/20' : 'border-white/10 bg-white/5 opacity-50 hover:opacity-100'
-                  }`}
-              >
-                <UserCircle className="w-6 h-6 text-white/70 mb-1" />
-                <span className="text-[8px] text-gray-400">Default</span>
-              </div>
-
-              {savedModels.map(model => (
-                <div
-                  key={model.id}
-                  onClick={() => setActiveModelId(model.id)}
-                  className={`relative flex-shrink-0 w-16 h-16 rounded-full border-2 cursor-pointer overflow-hidden transition-all snap-center group ${activeModelId === model.id ? 'border-indigo-500 ring-4 ring-indigo-500/20' : 'border-white/10 hover:border-white/50'
-                    }`}
-                >
-                  <img src={model.previewUrl} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-[8px] text-white font-bold truncate px-1">{model.name}</span>
-                  </div>
-                  {activeModelId === model.id && (
-                    <div className="absolute inset-0 bg-indigo-500/30 flex items-center justify-center">
-                      <CheckCircle2 className="w-6 h-6 text-white drop-shadow-md" />
-                    </div>
-                  )}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); if (confirm('삭제하시겠습니까?')) removeSavedModel(model.id); }}
-                    className="absolute top-0 right-0 p-1 bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 hover:bg-red-600 transition-all transform scale-75"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            {savedModels.length === 0 && (
-              <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[11px] text-indigo-300/80 leading-relaxed text-center">
-                ✨ 마음에 드는 결과물이 있나요?<br />
-                이미지 하단의 <b>[모델 저장]</b> 버튼을 눌러<br />나만의 전속 모델로 등록해보세요!
-              </div>
-            )}
-            <div className="h-px bg-white/10" />
-          </div>
 
           {/* Tab Navigation */}
           <div className="flex p-1 bg-black rounded-xl border border-white/10 mb-6">
@@ -632,20 +580,20 @@ const BackgroundChange: React.FC = () => {
 
             {activeTab === 'BENCHMARK' && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                 <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mb-4">
-                    <h4 className="text-xs font-black text-indigo-300 flex items-center gap-2 mb-1">
-                       <Zap className="w-4 h-4" /> High-CTR Vibe Copy
-                    </h4>
-                    <p className="text-[10px] text-indigo-200/60 leading-relaxed">
-                       경쟁사의 '잘 팔리는 썸네일'을 분석하고, 그 <b className="text-white">조명과 분위기</b>를 그대로 훔쳐옵니다.
-                    </p>
-                 </div>
-                 
-                 <BenchmarkUploader 
-                    onAnalysisComplete={setBenchmarkAnalysis} 
-                    onApplyStyle={handleBenchmarkApply}
-                    isGenerating={isLoading}
-                 />
+                <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mb-4">
+                  <h4 className="text-xs font-black text-indigo-300 flex items-center gap-2 mb-1">
+                    <Zap className="w-4 h-4" /> High-CTR Vibe Copy
+                  </h4>
+                  <p className="text-[10px] text-indigo-200/60 leading-relaxed">
+                    경쟁사의 '잘 팔리는 썸네일'을 분석하고, 그 <b className="text-white">조명과 분위기</b>를 그대로 훔쳐옵니다.
+                  </p>
+                </div>
+
+                <BenchmarkUploader
+                  onAnalysisComplete={setBenchmarkAnalysis}
+                  onApplyStyle={handleBenchmarkApply}
+                  isGenerating={isLoading}
+                />
               </div>
             )}
 
@@ -911,9 +859,7 @@ const BackgroundChange: React.FC = () => {
                       }} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-gray-300 transition-colors flex items-center justify-center gap-2">
                         <Download className="w-3 h-3" /> 저장
                       </button>
-                      <button onClick={() => handleSaveModel(item.url!)} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-[10px] font-bold text-white transition-colors flex items-center justify-center gap-2">
-                        <UserPlus className="w-3 h-3" /> 모델등록
-                      </button>
+
                       <button onClick={() => {
                         navigator.clipboard.writeText(item.url || '');
                         toast.success('링크가 복사되었습니다');
