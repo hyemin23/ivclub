@@ -29,7 +29,7 @@ const registerJob = async (payload: CVFJobRequest): Promise<{ job_id: string, st
 
 const Step2BatchStudio: React.FC = () => {
     // Inputs (v2.3)
-    const [jobName, setJobName] = useState(`Job_${Date.now()}`);
+    const [jobName, setJobName] = useState(() => `Job_${Date.now()}`);
 
     // UI #1: Master Shot (Preview Only)
     const [masterShot, setMasterShot] = useState<string | null>(null);

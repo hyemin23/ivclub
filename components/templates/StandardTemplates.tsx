@@ -4,7 +4,6 @@ import { ProductSpecs } from '../../types';
 interface TemplateProps {
     id: string;
     imageUrl?: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     copy?: any;
     mood?: string;
     colorHex?: string;

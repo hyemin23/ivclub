@@ -50,7 +50,7 @@ const ThumbnailGenerator: React.FC = () => {
   // Reset selected platforms when tab changes
   useEffect(() => {
     setSelectedPlatformIds(activePlatformsList.map(p => p.id));
-  }, [activeTab]);
+  }, [activeTab, activePlatformsList]);
 
   const activePlatforms = activePlatformsList.filter(p => selectedPlatformIds.includes(p.id));
 
@@ -157,7 +157,7 @@ const ThumbnailGenerator: React.FC = () => {
         ctx.drawImage(img, centerX, centerY, scaledWidth, scaledHeight);
       }
     });
-  }, [masterImage, cropStates, activeTab, selectedPlatformIds]);
+  }, [masterImage, cropStates, activeTab, selectedPlatformIds, activePlatforms]);
 
   const updateCropState = (id: string, updates: Partial<{ scale: number; x: number; y: number }>) => {
     setCropStates(prev => ({

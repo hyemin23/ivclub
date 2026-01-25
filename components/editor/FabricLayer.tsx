@@ -133,7 +133,7 @@ export const FabricLayer: React.FC<FabricLayerProps> = ({ width, height, imageUr
             // canvas.dispose(); 
             // Note: React 18 strict mode + fabric dispose can be tricky.
         };
-    }, [targetImage, width, height]); // Re-init if image changes
+    }, [targetImage, width, height]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Add Design Keywords
     useEffect(() => {
