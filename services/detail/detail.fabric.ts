@@ -6,7 +6,7 @@ import { getIconRuleSet, getIconSvgUrl } from './detail.rules';
  * - Background: Solid White (#FFFFFF) - NO Transparency
  * - Text Color: Dark Grey / Black
  */
-export const renderHighEndBlock = async (imageUrl: string, uspData: any[], overlayText: string = "COTTON 100%"): Promise<string> => {
+export const renderHighEndBlock = async (imageUrl: string, uspData: any[], overlayText: string = ""): Promise<string> => {
     const BASE_SIZE = 1024;
 
     // A. 캔버스 초기화 (배경색 명시적 지정)
@@ -67,17 +67,18 @@ export const renderHighEndBlock = async (imageUrl: string, uspData: any[], overl
     });
     canvas.add(img);
 
-    // F. 이미지 위 중앙 텍스트 (COTTON 100%) - 이건 흰색 유지
-    // F. 이미지 위 중앙 텍스트 (Dynamic) - 이건 흰색 유지
-    const mainText = new Text(overlayText, {
-        fontFamily: 'serif',
-        fontSize: BASE_SIZE * 0.07,
-        fill: '#FFFFFF',
-        left: centerX, top: topImageCenterY,
-        originX: 'center', originY: 'center',
-        shadow: new Shadow({ color: "rgba(0,0,0,0.5)", blur: 15 })
-    });
-    canvas.add(mainText);
+    // F. 이미지 위 중앙 텍스트 (Dynamic) - 값이 있을 때만 렌더링
+    if (overlayText) {
+        const mainText = new Text(overlayText, {
+            fontFamily: 'serif',
+            fontSize: BASE_SIZE * 0.07,
+            fill: '#FFFFFF',
+            left: centerX, top: topImageCenterY,
+            originX: 'center', originY: 'center',
+            shadow: new Shadow({ color: "rgba(0,0,0,0.5)", blur: 15 })
+        });
+        canvas.add(mainText);
+    }
 
     // G. 하단 아이콘 & 텍스트 배치
     const startY = topSectionHeight + (BASE_SIZE * 0.05);

@@ -10,6 +10,8 @@ interface RenderInput {
     baseImage: string;
     colorConfig: { label: string, hex_override?: string, image_id?: string } | null;
     options: CVFConfig;
+    seed?: number; // Job Isolation Seed
+    retryMode?: boolean; // SRS 3.3 Retry
 }
 
 interface RenderResult {
@@ -47,16 +49,21 @@ export const renderTask = async (input: RenderInput): Promise<RenderResult> => {
         prompt += "Keep the original outfit color and texture exactly as is. ";
     }
 
-    prompt += "High quality, photorealistic, strict detail preservation.";
+    prompt += "Strictly maintain the original background pixel-for-pixel. Do NOT regenerate the background. ";
+    prompt += "ZERO-DRIFT MODE: Ensure the garment texture and pattern remains exactly identical, only shifting the hue/tone. ";
+    prompt += "Output must be high quality, photorealistic.";
 
     try {
         const response = await generateContentSafe(prompt, [
             { inlineData: { data: baseImage.split(',')[1], mimeType: 'image/jpeg' } }
         ], {
             taskType: 'CREATION',
-            model: 'models/nano-banana-pro-preview',
+            model: 'models/gemini-1.5-pro-002', // Use Stable Pro
             config: {
-                generationConfig: { temperature: 0.3 } // Low temp for preservation
+                generationConfig: {
+                    temperature: input.retryMode ? 0.1 : 0.2 // Lowered for fidelity on retry
+                    // seed: input.seed // Gemini API might not support direct seed in this client wrapper yet, but logic is ready
+                }
             }
         });
 

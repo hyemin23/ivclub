@@ -6,7 +6,7 @@ export type ProductCategory = '상의' | '하의' | '아우터' | '셋업' | '�
 export type MaterialType = '코튼' | '데님' | '나일론' | '울' | '니트' | '기모' | '린넨' | '혼방';
 export type ViewMode = 'full' | 'top' | 'bottom';
 export type PageLength = '5' | '7' | '9' | 'auto';
-export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio' | 'color-variation' | 'batch-studio';
+export type AppView = 'ugc-master' | 'factory' | 'fit-builder' | 'auto-fitting' | 'settings' | 'brand_identity' | 'social_strategy' | 'thumbnail-generator' | 'admin' | 'canvas-editor' | 'video-studio' | 'color-variation' | 'batch-studio' | 'html-cleaner' | 'background-swap';
 export type FitSubMode = 'pose-change' | 'detail-extra' | 'fitting-variation' | 'virtual-try-on' | 'face-swap' | 'background-change' | 'outfit-swap' | 'size-extract' | 'commerce-factory';
 
 export type FaceMode = 'ON' | 'OFF' | 'HEADLESS';

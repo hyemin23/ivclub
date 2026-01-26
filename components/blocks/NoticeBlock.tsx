@@ -1,69 +1,87 @@
-import React, { useRef } from 'react';
-import { PageBlock } from '../../types';
+
+import React from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Upload } from 'lucide-react';
 
 interface NoticeBlockProps {
-    content: any;
-    onUpdate: (content: any) => void;
+    content: {
+        imageUrl?: string | null;
+        text?: string;
+    };
     isExporting: boolean;
+    onUpdate?: (newContent: any) => void;
 }
 
-export default function NoticeBlock({ content, onUpdate, isExporting }: NoticeBlockProps) {
-    const fileInputRef = useRef<HTMLInputElement>(null);
+const NoticeBlock: React.FC<NoticeBlockProps> = ({ content, isExporting, onUpdate }) => {
+    // dnd-kit hooks
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+    } = useSortable({ id: `notice-${Math.random()}` }); // Note: Ideally ID should be passed in props for sorting to work perfectly
 
-    // 이미지 업로드 핸들러
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
+        if (file && onUpdate) {
             const imageUrl = URL.createObjectURL(file);
-            // 부모 컴포넌트에 데이터 업데이트 알림
             onUpdate({ ...content, imageUrl });
         }
     };
 
+    // If exporting, render clean image without controls
+    if (isExporting) {
+        if (!content.imageUrl) return null; // Don't render empty blocks on export
+        return (
+            <div className="w-full">
+                <img src={content.imageUrl} alt="Notice" className="w-full h-auto block" />
+            </div>
+        );
+    }
+
     return (
-        <div className="w-[640px] mx-auto bg-white">
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="w-full relative group min-h-[100px] bg-white border-b border-gray-100 hover:border-blue-500 transition-colors"
+        >
+            {/* Drag Handle Overlay */}
+            <div
+                {...attributes}
+                {...listeners}
+                className="absolute inset-0 z-10 cursor-move opacity-0 group-hover:opacity-100 bg-blue-500/5 transition-opacity"
+            />
 
-            {/* 1. 공지사항 이미지 영역 */}
             {content.imageUrl ? (
-                <div className="relative group">
-                    <img
-                        src={content.imageUrl}
-                        alt="Notice"
-                        className="w-full h-auto block" // 가로 꽉 채우기
-                    />
+                <div className="relative">
+                    <img src={content.imageUrl} alt="Notice" className="w-full h-auto block" />
 
-                    {/* [편집 모드일 때만] 이미지 변경 버튼 노출 */}
-                    {!isExporting && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                            onClick={() => fileInputRef.current?.click()}>
-                            <span className="text-white font-bold border border-white px-4 py-2 rounded">
-                                🔄 공지사항 이미지 변경
-                            </span>
-                        </div>
-                    )}
+                    {/* Control for changing image */}
+                    <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <label className="p-2 bg-black/50 hover:bg-black/70 rounded-full cursor-pointer text-white flex items-center justify-center">
+                            <Upload className="w-4 h-4" />
+                            <input type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+                        </label>
+                    </div>
                 </div>
             ) : (
-                /* 2. 이미지가 없을 때 (업로드 유도 UI) */
-                !isExporting && (
-                    <div
-                        className="h-40 bg-gray-50 border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-gray-500 transition-colors m-4"
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        <span className="text-2xl mb-2">📢</span>
-                        <span className="text-gray-500 font-medium">배송/교환/반품 공지사항 업로드</span>
-                        <span className="text-xs text-gray-400 mt-1">클릭하여 이미지(JPG/PNG)를 추가하세요</span>
-                    </div>
-                )
+                <div className="w-full h-32 flex flex-col items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 m-4 rounded-xl">
+                    <p className="text-gray-400 text-sm font-bold mb-2">이미지 없음</p>
+                    <label className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-50 z-20">
+                        이미지 업로드
+                        <input type="file" accept="image/*" className="hidden" onChange={handleUpload} />
+                    </label>
+                </div>
             )}
-
-            {/* 숨겨진 파일 인풋 */}
-            <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImageUpload}
-                accept="image/*"
-                className="hidden"
-            />
         </div>
     );
-}
+};
+
+export default NoticeBlock;

@@ -1,94 +1,63 @@
+
 import React from 'react';
 
-// Common Types
+// --- Types ---
 interface TemplateProps {
-    id: string; // for capture reference
-    imageUrl: string;
-    copy: {
+    id: string;
+    imageUrl?: string;
+    copy?: {
         main?: string;
         sub?: string;
-        title?: string;
-        desc?: string;
     };
-    mood: string;
-    colorHex?: string;
+    mood?: string;
+    color?: string;
 }
 
-// 1. Main Banner (Hero)
-export const MainBannerTemplate: React.FC<TemplateProps> = ({ id, imageUrl, copy, mood, colorHex }) => {
-    const isDynamic = mood.toLowerCase().includes('dynamic');
-    const isMinimal = mood.toLowerCase().includes('minimal');
-
+// --- 1. Main Banner Template ---
+export const MainBannerTemplate: React.FC<TemplateProps> = ({ imageUrl, copy, color }) => {
     return (
-        <div
-            id={id}
-            className="w-[640px] relative overflow-hidden bg-gray-100"
-            style={{ aspectRatio: '3/4' }}
-        >
-            <img src={imageUrl} className={`w-full h-full object-cover ${isDynamic ? 'scale-110' : ''}`} alt="Main" />
-
-            {/* Overlay - Style varies by mood */}
-            <div className={`absolute inset-0 flex flex-col justify-end p-8 ${isMinimal
-                ? 'bg-gradient-to-t from-black/50 via-transparent to-transparent'
-                : 'bg-gradient-to-t from-black/80 via-black/20 to-transparent'
-                }`}>
-                <h1 className={`text-white whitespace-pre-wrap mb-4 drop-shadow-lg ${isMinimal ? 'text-4xl font-light tracking-widest' : 'text-5xl font-black italic tracking-tighter'
-                    }`}>
-                    {copy.main}
-                </h1>
-                <p className={`text-white/90 text-lg font-medium drop-shadow-md ${isMinimal ? 'tracking-wide' : ''}`}>
-                    {copy.sub}
-                </p>
-
-                {/* Accent Line */}
-                <div className="w-12 h-1 bg-white mt-6" style={{ backgroundColor: colorHex || 'white' }} />
+        <div className="w-full h-[600px] relative flex items-center justify-center overflow-hidden">
+            <div className="absolute inset-0 bg-gray-200">
+                {imageUrl && <img src={imageUrl} className="w-full h-full object-cover" />}
+            </div>
+            <div className="absolute inset-0 bg-black/30" />
+            <div className="relative z-10 text-center p-8 border-2 border-white/50 m-8">
+                <h1 className="text-4xl font-black text-white mb-2 uppercase tracking-widest">{copy?.main || 'MAIN HEADLINE'}</h1>
+                <p className="text-xl text-white font-light tracking-wide">{copy?.sub || 'Subheadline text goes here'}</p>
             </div>
         </div>
     );
 };
 
-// 2. Feature Grid (Functional)
-export const FeatureGridTemplate: React.FC<TemplateProps> = ({ id, imageUrl, copy, colorHex }) => {
+// --- 2. Feature Grid Template ---
+export const FeatureGridTemplate: React.FC<TemplateProps> = ({ imageUrl, copy, color }) => {
     return (
-        <div id={id} className="w-[640px] bg-white flex flex-col">
-            {/* Top Image */}
-            <div className="w-full h-[500px] overflow-hidden relative">
-                <img src={imageUrl} className="w-full h-full object-cover" alt="Detail" />
-                <div className="absolute bottom-0 right-0 bg-white px-6 py-3 rounded-tl-xl font-bold text-xs uppercase tracking-widest border-t border-l border-gray-100">
-                    Detail View
-                </div>
-            </div>
-
-            {/* Bottom Text Area */}
-            <div className="p-10 flex flex-col justify-center items-center text-center bg-gray-50">
-                <span
-                    className="text-xs font-bold uppercase mb-4 px-3 py-1 rounded-full text-white"
-                    style={{ backgroundColor: colorHex || '#4F46E5' }}
-                >
-                    Key Feature
-                </span>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">{copy.title}</h2>
-                <p className="text-gray-600 leading-relaxed max-w-sm">
-                    {copy.desc}
-                </p>
+        <div className="w-full py-12 px-6 flex flex-col items-center bg-white">
+            <h2 className="text-2xl font-bold mb-8 text-gray-800 uppercase tracking-widest">Key Features</h2>
+            <div className="grid grid-cols-2 gap-4 w-full">
+                 <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
+                    {imageUrl && <img src={imageUrl} className="w-full h-full object-cover" />}
+                 </div>
+                 <div className="flex flex-col justify-center p-4">
+                     <h3 className="text-lg font-bold mb-2">{copy?.main || 'Feature Point'}</h3>
+                     <p className="text-sm text-gray-600 leading-relaxed">{copy?.sub || 'Detailed description of the feature.'}</p>
+                 </div>
             </div>
         </div>
     );
 };
 
-// 3. TPO Card (Emotional)
-export const TpoCardTemplate: React.FC<TemplateProps> = ({ id, imageUrl, copy, mood }) => {
+// --- 3. TPO Card Template ---
+export const TpoCardTemplate: React.FC<TemplateProps> = ({ imageUrl, copy, color }) => {
     return (
-        <div id={id} className="w-[640px] p-8" style={{ backgroundColor: '#F9FAFB' }}>
-            <div className="bg-white shadow-xl p-4 rotate-1 transform transition-transform hover:rotate-0">
-                <div className="w-full aspect-[4/5] overflow-hidden mb-4 bg-gray-200">
-                    <img src={imageUrl} className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-700" alt="TPO" />
+        <div className="w-full p-8 bg-gray-50">
+            <div className="bg-white shadow-xl p-6 rounded-sm">
+                <div className="aspect-[4/3] bg-gray-200 mb-6 relative">
+                     {imageUrl && <img src={imageUrl} className="w-full h-full object-cover" />}
+                     <div className="absolute top-4 left-4 bg-black text-white px-3 py-1 text-xs font-bold uppercase">Recommend</div>
                 </div>
-
-                <div className="text-center pb-2">
-                    <h3 className="font-serif text-xl italic text-gray-800 mb-1">&quot;{copy.title}&quot;</h3>
-                    <p className="text-xs font-sans text-gray-400 uppercase tracking-widest">{copy.desc}</p>
-                </div>
+                <h3 className="text-xl font-bold mb-2 text-center">{copy?.main || 'Best for...'}</h3>
+                 <p className="text-sm text-gray-500 text-center">{copy?.sub || 'Perfect for daily wear and office look.'}</p>
             </div>
         </div>
     );

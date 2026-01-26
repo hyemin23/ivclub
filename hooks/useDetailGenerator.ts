@@ -7,8 +7,10 @@ import { renderSpecToSvg } from '../services/dsig/dsig.renderer';
 import { getIconRuleSet } from '../services/detail/detail.rules'; // Fallback
 
 export const useDetailGenerator = () => {
-    const [baseImage, setBaseImage] = useState<string | null>(null);
-    const [refImage, setRefImage] = useState<string | null>(null);
+    const [baseImages, setBaseImages] = useState<string[]>([]);
+    const [baseImage, setBaseImage] = useState<string | null>(null); // Main/First Image for Preview
+    const [refImages, setRefImages] = useState<string[]>([]); // Changed to Array
+    const [refImage, setRefImage] = useState<string | null>(null); // Main/First for Preview
     const [prompt, setPrompt] = useState(STYLE_PRESETS[0].prompt);
     const [selectedStyle, setSelectedStyle] = useState(STYLE_PRESETS[0].id);
     const [resolution, setResolution] = useState<Resolution>('2K');
@@ -39,15 +41,24 @@ export const useDetailGenerator = () => {
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         const result = reader.result as string;
-                        if (!baseImage) setBaseImage(result);
-                        else if (!refImage) setRefImage(result);
-                        else setBaseImage(result);
+                        if (!baseImage) {
+                            setBaseImage(result);
+                            setBaseImages([result]);
+                        }
+                        else if (refImages.length === 0) {
+                            setRefImage(result);
+                            setRefImages([result]);
+                        }
+                        else {
+                            setBaseImage(result);
+                            setBaseImages([result]);
+                        }
                     };
                     reader.readAsDataURL(blob);
                 }
             }
         }
-    }, [baseImage, refImage]);
+    }, [baseImage, refImage, refImages]); // Updated Dep
 
     useEffect(() => {
         window.addEventListener('paste', handlePaste);
@@ -55,19 +66,39 @@ export const useDetailGenerator = () => {
     }, [handlePaste]);
 
     const handleImageUpload = (type: 'base' | 'ref', e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            if (file.size > 20 * 1024 * 1024) {
-                alert("파일 용량이 너무 큽니다. 20MB 이하의 이미지를 사용해주세요.");
-                return;
-            }
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                if (type === 'base') setBaseImage(reader.result as string);
-                else setRefImage(reader.result as string);
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+
+        if (type === 'base') {
+            // Batch Upload Logic
+            const readers = files.map(file => {
+                return new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            Promise.all(readers).then(results => {
+                setBaseImages(results);
+                setBaseImage(results[0]); // Set first as main
                 e.target.value = '';
-            };
-            reader.readAsDataURL(file);
+            });
+        } else {
+            // Ref Image (Batch)
+            const readers = files.map(file => {
+                return new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            Promise.all(readers).then(results => {
+                setRefImages(results);
+                setRefImage(results[0]);
+                e.target.value = '';
+            });
         }
     };
 
@@ -80,7 +111,7 @@ export const useDetailGenerator = () => {
             if (selectedStyle === 'rose-cut') {
                 const aiGeneratedUrl = await generateDetailExtra(
                     baseImage,
-                    refImage,
+                    refImages.length > 0 ? refImages : null, // Pass Array
                     prompt,
                     '1024x1024' as Resolution,
                     '1:1',
@@ -130,12 +161,41 @@ export const useDetailGenerator = () => {
                     finalUspData = getIconRuleSet(uspKeywords);
                 }
 
-                const finalUrl = await renderHighEndBlock(aiGeneratedUrl, finalUspData, fabricText || "COTTON 100%");
+                const finalUrl = await renderHighEndBlock(aiGeneratedUrl, finalUspData, fabricText);
                 setResultImages([finalUrl]);
             } else {
-                const promises = Array.from({ length: imageCount }, () =>
-                    generateDetailExtra(baseImage, refImage, prompt, resolution, aspectRatio)
-                );
+                // Batch Generation Logic
+                // If multiple base images exist, generate for EACH base image.
+                // If only 1 base image, generate 'imageCount' variations of it.
+
+                let promises: Promise<string>[];
+
+                if (baseImages.length > 1) {
+                    // Batch Mode: 1 Result per Base Image
+                    // Stagger usage to prevent rate limiting
+                    promises = baseImages.map(async (img, idx) => {
+                        console.log(`[Batch] Starting image ${idx + 1}/${baseImages.length}`);
+                        await new Promise(resolve => setTimeout(resolve, idx * 1000)); // 1s delay
+                        return generateDetailExtra(
+                            img,
+                            refImages.length > 0 ? refImages : null,
+                            prompt,
+                            resolution,
+                            aspectRatio
+                        );
+                    });
+                } else {
+                    // Single Mode: N Results for 1 Base Image
+                    promises = Array.from({ length: imageCount }, () =>
+                        generateDetailExtra(
+                            baseImage!,
+                            refImages.length > 0 ? refImages : null,
+                            prompt,
+                            resolution,
+                            aspectRatio
+                        )
+                    );
+                }
 
                 const results = await Promise.allSettled(promises);
                 const successfulImages = results
@@ -170,7 +230,9 @@ export const useDetailGenerator = () => {
 
     return {
         baseImage, setBaseImage,
+        baseImages, setBaseImages,
         refImage, setRefImage,
+        refImages, setRefImages, // New Export
         prompt, setPrompt,
         selectedStyle, setSelectedStyle,
         resolution, setResolution,

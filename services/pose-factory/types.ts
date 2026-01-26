@@ -26,7 +26,15 @@ export interface CVFConfig {
     mode: 'VARIANT_GROUP_ONLY'; // v2.3 Scope
     headless: boolean;
     background_lock: boolean;
+    recolor_mode: 'paint_only'; // SRS 2.3 Strict
+    isolation: boolean; // SRS 4.0 Job Isolation
     pose_angles: CVFPoseId[]; // ["FRONT", "LEFT_15", "RIGHT_15"]
+    pose_variation?: {
+        enabled: boolean;
+        intensity: number; // 0.2~0.4
+        arm_allowlist?: string[]; // ["A1...", "A2..."]
+        leg_allowlist?: string[];
+    };
     output: {
         format: 'png' | 'jpg';
         resolution: '1k' | '2k';
@@ -35,6 +43,11 @@ export interface CVFConfig {
         format: 'webp';
         size: number;
         quality: number;
+    };
+    qa_thresholds?: {
+        ssim_min?: number; // 0.82 (updated from 0.78)
+        edge_iou_min?: number; // 0.75 (updated from 0.70)
+        delta_e_max?: number; // 8.0
     };
 }
 
@@ -66,6 +79,12 @@ export interface CVFStreamEvent_ItemCompleted {
     original_url: string;
     status: 'success';
     metadata?: { is_mirrored: boolean };
+    qa_scores?: {
+        ssim: number;
+        edge_iou: number;
+        delta_e: number;
+        passed: boolean;
+    };
 }
 
 export interface CVFStreamEvent_ItemFailed {

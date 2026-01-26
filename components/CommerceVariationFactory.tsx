@@ -112,12 +112,32 @@ export const CommerceVariationFactory: React.FC = () => {
                             </span>
                             <button
                                 onClick={() => {
-                                    const link = document.createElement('a');
-                                    link.href = item.url!;
-                                    link.download = `${item.id}.png`;
-                                    link.click();
+                                    try {
+                                        // Robust Download Logic for Large Base64
+                                        const byteString = atob(item.url!.split(',')[1]);
+                                        const mimeString = item.url!.split(',')[0].split(':')[1].split(';')[0];
+                                        const ab = new ArrayBuffer(byteString.length);
+                                        const ia = new Uint8Array(ab);
+                                        for (let i = 0; i < byteString.length; i++) {
+                                            ia[i] = byteString.charCodeAt(i);
+                                        }
+                                        const blob = new Blob([ab], { type: mimeString });
+                                        const blobUrl = URL.createObjectURL(blob);
+
+                                        const link = document.createElement('a');
+                                        link.href = blobUrl;
+                                        link.download = `${item.id}.png`;
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        URL.revokeObjectURL(blobUrl);
+                                        toast.success("다운로드 시작");
+                                    } catch (e) {
+                                        console.error("Download failed", e);
+                                        toast.error("다운로드 실패");
+                                    }
                                 }}
-                                className="p-2 bg-white text-black rounded-full hover:bg-gray-200"
+                                className="p-2 bg-white text-black rounded-full hover:bg-gray-200 transition-colors shadow-lg"
                             >
                                 <Download className="w-4 h-4" />
                             </button>
@@ -186,9 +206,19 @@ export const CommerceVariationFactory: React.FC = () => {
 
                     {/* 2. Variant Groups (Color) */}
                     <div className="lg:col-span-2 space-y-4 flex flex-col">
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">
-                            2. Color Variants (Items)
-                        </label>
+                        <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest pl-1">
+                                2. Color Variants (Items)
+                            </label>
+                            {colorGroups.length > 0 && (
+                                <button
+                                    onClick={() => setColorGroups([])}
+                                    className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1"
+                                >
+                                    <Trash2 className="w-3 h-3" /> Clear All
+                                </button>
+                            )}
+                        </div>
 
                         <div className="flex-1 bg-black/40 border border-white/5 rounded-2xl p-4 flex gap-4 overflow-x-auto min-h-[200px] items-center">
                             {/* Add Button */}

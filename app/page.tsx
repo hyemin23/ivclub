@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Factory, UserRoundPen, Zap, Settings, User, Rocket, Smartphone, Users, Menu, X, LayoutGrid, PanelLeftClose, PanelLeftOpen, Lock, Palette, Video, Layers } from 'lucide-react';
+import { Factory, UserRoundPen, Zap, Settings, User, Rocket, Smartphone, Users, Menu, X, LayoutGrid, PanelLeftClose, PanelLeftOpen, Lock, Palette, Video, Layers, Eraser } from 'lucide-react';
 import { useStore } from '@/store';
 import { SidebarGroup } from '@/components/SidebarGroup';
 import FloatingLogViewer from '@/components/FloatingLogViewer';
@@ -46,6 +46,14 @@ const ColorVariation = dynamic(() => import('@/components/ColorVariation').then(
 });
 const BatchStudio = dynamic(() => import('@/components/Step2BatchStudio'), {
   loading: () => <div className="p-12 text-center text-gray-500">Loading Batch Studio...</div>,
+  ssr: false
+});
+const HtmlCleaner = dynamic(() => import('@/components/HtmlCleaner'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading HTML Cleaner...</div>,
+  ssr: false
+});
+const BackgroundSwapStudio = dynamic(() => import('@/components/BackgroundSwapStudio'), {
+  loading: () => <div className="p-12 text-center text-gray-500">Loading BSE v1.2...</div>,
   ssr: false
 });
 
@@ -108,6 +116,13 @@ const Page: React.FC = () => {
           view: 'batch-studio' as const
         },
         {
+          id: 'background-swap',
+          name: '배경 스왑 엔진',
+          icon: <Layers className="w-5 h-5 text-indigo-400" />,
+          description: 'BSE v1.2 (Strict)',
+          view: 'background-swap' as const
+        },
+        {
           id: 'canvas-editor',
           name: '캔버스 에디터',
           icon: <Palette className="w-5 h-5" />,
@@ -138,6 +153,13 @@ const Page: React.FC = () => {
     {
       title: "시스템",
       items: [
+        {
+          id: 'html-cleaner',
+          name: 'HTML 클리너',
+          icon: <Eraser className="w-5 h-5 text-indigo-400" />,
+          description: '스마트스토어 태그 정리',
+          view: 'html-cleaner' as const
+        },
         {
           id: 'settings',
           name: '시스템 설정',
@@ -283,6 +305,8 @@ const Page: React.FC = () => {
                 {appView === 'settings' && '시스템 구성 및 API 상태를 관리합니다.'}
                 {appView === 'color-variation' && '원단 질감과 조명을 완벽하게 보존하며 오직 색상만 변경합니다. (Texture Lock Engine)'}
                 {appView === 'batch-studio' && '단 한 장의 사진으로 20장 이상의 컬러/포즈 베리에이션 룩북을 일괄 생산합니다. (Matrix Engine)'}
+                {appView === 'html-cleaner' && '복잡한 에디터 HTML을 깔끔한 스마트스토어 전용 레이아웃으로 변환합니다.'}
+                {appView === 'background-swap' && '픽셀 단위로 원본을 보존하며 배경만 교체합니다. (Split Harmonization Engine)'}
               </p>
             </div>
 
@@ -317,6 +341,8 @@ const Page: React.FC = () => {
 
             {appView === 'color-variation' && <ColorVariation />}
             {appView === 'batch-studio' && <BatchStudio />}
+            {appView === 'html-cleaner' && <HtmlCleaner />}
+            {appView === 'background-swap' && <BackgroundSwapStudio />}
             {appView === 'settings' && (
               <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-bottom-4">
 

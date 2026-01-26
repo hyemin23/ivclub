@@ -124,7 +124,17 @@ const Step2BatchStudio: React.FC = () => {
                     mode: 'VARIANT_GROUP_ONLY',
                     headless,
                     background_lock: bgLock,
+                    recolor_mode: 'paint_only', // SRS 2.3 Strict Mode
+                    isolation: true, // SRS 4.0 Job Isolation
                     pose_angles: ['FRONT', 'LEFT_15', 'RIGHT_15'], // Micro-Pose
+                    pose_angles: ['FRONT', 'LEFT_15', 'RIGHT_15'],
+                    pose_variation: {
+                        enabled: true,
+                        intensity: 0.3,
+                        arm_allowlist: ["A1_RELAXED_BEND", "A2_ONE_HAND_POCKET"],
+                        leg_allowlist: ["L1_WEIGHT_SHIFT_L", "L3_MICRO_STEP_TOE_OUT"]
+                    },
+                    qa_thresholds: { ssim_min: 0.82, edge_iou_min: 0.75, delta_e_max: 8.0 }, // v2.3.3 Hardening
                     output: { format: 'png', resolution: '2k' },
                     thumbnails: { format: 'webp', size: 512, quality: 80 }
                 },
@@ -175,13 +185,40 @@ const Step2BatchStudio: React.FC = () => {
                 </div>
 
                 <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-sm">
-                    <p className="text-[10px] font-mono text-white flex justify-between">
+                    <p className="text-[10px] font-mono text-white flex justify-between items-center">
                         <span>{item.pose}</span>
+                        {item.qa_scores && (
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black ${item.qa_scores.passed ? 'bg-green-500 text-black' : 'bg-red-500 text-white'}`}>
+                                QA: {(item.qa_scores.ssim * 100).toFixed(0)}%
+                            </span>
+                        )}
                         <span className="text-gray-400">{Math.abs(item.estimated_yaw_deg)}°</span>
                     </p>
                 </div>
             </div>
         );
+    };
+
+    const handleDownloadAll = async () => {
+        const zip = new JSZip();
+        // Add Original
+        if (results['Original']) {
+            results['Original'].forEach(item => {
+                const b64 = item.original_url.split(',')[1];
+                zip.file(`Original_${item.pose}.png`, b64, { base64: true });
+            });
+        }
+        // Add Variants
+        Object.keys(results).filter(k => k !== 'Original').forEach(key => {
+            const folder = zip.folder(key);
+            results[key].forEach(item => {
+                const b64 = item.original_url.split(',')[1];
+                folder?.file(`${key}_${item.pose}.png`, b64, { base64: true });
+            });
+        });
+
+        const content = await zip.generateAsync({ type: 'blob' });
+        saveAs(content, `${jobName}_Complete.zip`);
     };
 
     return (
@@ -228,6 +265,14 @@ const Step2BatchStudio: React.FC = () => {
                                 </div>
                             </div>
                         </div>
+
+                    )}
+
+                    {/* Download All Button - Only show when finished or has results */}
+                    {!isProcessing && Object.keys(results).length > 0 && (
+                        <button onClick={handleDownloadAll} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-xl text-xs font-black uppercase text-white transition-colors">
+                            <Download className="w-4 h-4" /> Download ZIP
+                        </button>
                     )}
                 </div>
 
@@ -320,7 +365,7 @@ const Step2BatchStudio: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 export default Step2BatchStudio;

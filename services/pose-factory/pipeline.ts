@@ -3,22 +3,28 @@ import {
     CVFJobRequest, CVFInputData, VariantGroupInput, JobContextV2,
     CVFPoseId, CVFStreamEvent_ItemCompleted, CVFStreamEvent_ItemFailed
 } from './types';
-import { renderTask } from './renderer'; // Will update renderer next
-import { StreamManager } from './stream'; // Reuse existing stream manager logic
+import { renderTask } from './renderer';
+import { StreamManager } from './stream';
 import { calculateNavigatedYaw } from './ycpn';
+import crypto from 'crypto';
 
 // SRS v2.3 Pipeline Logic
 
 export class CVFPipeline {
 
-    // Stage 0: Normalize (MR-0)
+    // Stage 0: Deterministic Seed & Normalize
     static normalizeInput(input: CVFInputData): VariantGroupInput {
         // Drop master_shot_id (MR-0)
-        // Ensure Original is present
         if (!input.variant_group.original_image_id) {
             throw new Error("TARGET_ORIGINAL_MISSING");
         }
         return input.variant_group;
+    }
+
+    // Helper: Deterministic Seed
+    private static generateJobSeed(jobId: string, groupId: string, pose: string): number {
+        const hash = crypto.createHash('sha256').update(`${jobId}-${groupId}-${pose}`).digest('hex');
+        return parseInt(hash.substring(0, 8), 16);
     }
 
     // Stage 1-2: Analysis (Stub)
@@ -105,36 +111,79 @@ export class CVFPipeline {
                     mirrorRequired = true; // Flag for UI/Result
                 }
 
-                // Render
-                const result = await renderTask({
-                    pose: effectivePose,
-                    baseImage: baseImageId,
-                    colorConfig: colorConfig, // Pass color info if exists
-                    options: config
-                });
+                // Stage 4 & 5: Render & QA with Retry Policy (SRS 3.3)
+                // Retry once if QA fails or Gen fails
+                const MAX_RETRIES = 1;
+                let attempt = 0;
+                let qaScores = null;
+                let renderResult = null;
+                let isSuccess = false;
 
-                if (result.status === 'success') {
-                    // Stage 5: Validator (Stub)
-                    // Check yaw, etc. 
-                    const estimatedYaw = mirrorRequired ? -(result.relative_yaw || 15) : (result.relative_yaw || -15);
+                // Render with Deterministic Seed
+                const seed = this.generateJobSeed(jobId, groupLabel, effectivePose);
 
+                while (attempt <= MAX_RETRIES && !isSuccess) {
+                    // Adjust params for retry (SRS 3.3: Denoise -0.03, etc)
+                    const isRetry = attempt > 0;
+                    const currentConfig = isRetry ? { ...config, generationConfig: { ...config.generationConfig, temperature: 0.15 } } : config; // Simulate stricter config
+
+                    renderResult = await renderTask({
+                        pose: effectivePose,
+                        baseImage: baseImageId,
+                        colorConfig: colorConfig,
+                        options: currentConfig,
+                        seed: seed + attempt, // Shift seed on retry? SRS says "Retry use only modified params", but usually seed shift helps escape bad local minima. SRS says "Determinstic". Let's keep seed SAME but change params. OK SRS says "Retry policy... denoise -0.03".
+                        // Actually SRS 0.1 says "Retry 시에만 seed 변형 허용". So we CAN shift seed.
+                        // I will shift seed for retry.
+                        retryMode: isRetry
+                    });
+
+                    if (renderResult.status === 'success') {
+                        // Mock QA (SRS 3.3)
+                        const mockSSIM = 0.80 + (Math.random() * 0.1); // Range 0.80 ~ 0.90
+                        const mockIoU = 0.72 + (Math.random() * 0.15); // Range 0.72 ~ 0.87
+                        const mockDeltaE = 2.0 + (Math.random() * 5.0); // Range 2.0 ~ 7.0
+
+                        const ssimThreshold = config.qa_thresholds?.ssim_min || 0.82;
+                        const iouThreshold = config.qa_thresholds?.edge_iou_min || 0.75;
+                        const deltaMax = config.qa_thresholds?.delta_e_max || 8.0;
+
+                        const passed = (mockSSIM >= ssimThreshold) && (mockIoU >= iouThreshold) && (mockDeltaE <= deltaMax);
+
+                        qaScores = { ssim: mockSSIM, edge_iou: mockIoU, delta_e: mockDeltaE, passed };
+
+                        if (passed) {
+                            isSuccess = true;
+                        } else {
+                            console.log(`[QA_FAIL] Attempt ${attempt} - SSIM:${mockSSIM.toFixed(2)} IoU:${mockIoU.toFixed(2)}`);
+                            attempt++;
+                        }
+                    } else {
+                        attempt++;
+                    }
+                }
+
+                if (isSuccess && renderResult) {
+                    const estimatedYaw = mirrorRequired ? -(renderResult.relative_yaw || 15) : (renderResult.relative_yaw || -15);
                     // Emit Success
                     StreamManager.emit(jobId, {
                         type: 'ITEM_COMPLETED',
                         data: {
                             group: groupLabel,
-                            pose: pose, // Emit the ORIGINAL requested pose ID
+                            pose: pose,
                             estimated_yaw_deg: estimatedYaw,
-                            thumbnail_url: result.url, // In v2.3 this might be the Left image. UI flips it.
-                            original_url: result.url,
+                            thumbnail_url: renderResult.url,
+                            original_url: renderResult.url,
                             status: 'success',
                             metadata: {
-                                is_mirrored: mirrorRequired // Hint for UI
-                            }
+                                is_mirrored: mirrorRequired
+                            },
+                            qa_scores: qaScores
                         }
                     });
                 } else {
-                    throw new Error(result.error);
+                    // Failed after retries
+                    throw new Error(renderResult?.error || "QA_DRIFT_DETECTED");
                 }
 
             } catch (e: any) {

@@ -10,7 +10,9 @@ import { DetailResults } from './detail/DetailResults';
 const DetailExtra: React.FC = () => {
   const {
     baseImage, setBaseImage,
+    baseImages, setBaseImages,
     refImage, setRefImage,
+    refImages, setRefImages, // New Hook Return
     prompt, setPrompt,
     selectedStyle, handleStyleSelect,
     resolution, setResolution,
@@ -46,9 +48,13 @@ const DetailExtra: React.FC = () => {
             {/* 1. Upload Area */}
             <DetailUploader
               baseImage={baseImage}
+              baseImages={baseImages}
               refImage={refImage}
               setBaseImage={setBaseImage}
+              setBaseImages={setBaseImages}
+              refImages={refImages}
               setRefImage={setRefImage}
+              setRefImages={setRefImages}
               handleImageUpload={handleImageUpload}
             />
 

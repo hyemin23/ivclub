@@ -104,7 +104,7 @@ export const analyzeProductImage = async (file: File): Promise<ProductAnalysis> 
     const prompt = `Analyze this fashion product image carefully. Extract details in JSON.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-002',
       contents: [{ role: 'user', parts: [{ inlineData: { data, mimeType: file.type } }, { text: prompt }] }],
       config: { responseMimeType: "application/json" }
     });
@@ -130,7 +130,7 @@ export const generateDetailContent = async (analysis: ProductAnalysis, productNa
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const prompt = `Create detail page content for "${productName}". Analysis: ${JSON.stringify(analysis)}. Tone: ${toneManner}. Return JSON Array of sections.`;
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-002',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: { responseMimeType: "application/json" }
     });
@@ -157,7 +157,7 @@ export const extractBatchKeywords = async (imageBase64: string): Promise<{ categ
     const parts: any[] = [{ inlineData: { data: imageBase64.split(',')[1], mimeType: 'image/png' } }];
     parts.push({ text: "Analyze clothing. Return JSON: {category: string, sizes: string[]}" });
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-002',
       contents: [{ role: 'user', parts }],
       config: { responseMimeType: "application/json" }
     });
@@ -178,7 +178,7 @@ export const generateMarketingCopy = async (productName: string, features: strin
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const prompt = `Transform to marketing copy. Product: ${productName}. Features: ${features.join(', ')}. Return JSON.`;
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-002',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
@@ -204,7 +204,7 @@ export const analyzeImageMood = async (file: File): Promise<{ mood: string, tags
     const data = base64.split(',')[1];
     const prompt = `Analyze mood. Return JSON: { mood, tags, colorHex }`;
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-002',
       contents: [{ role: 'user', parts: [{ inlineData: { data, mimeType: file.type } }, { text: prompt }] }],
       config: { responseMimeType: "application/json" }
     });
@@ -216,7 +216,7 @@ export const extractProductSpecs = async (description: string): Promise<ProductS
   return retryOperation(async () => {
     const ai = new GoogleGenAI({ apiKey: getApiKey() });
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-002',
       contents: [{ role: 'user', parts: [{ text: `Extract specs from: ${description}. Return JSON.` }] }],
       config: { responseMimeType: "application/json" }
     });
@@ -354,7 +354,7 @@ export const generateFittingVariation = async (
 
 export const generateDetailExtra = async (
   baseImage: string,
-  refImage: string | null,
+  refImages: string[] | string | null,
   prompt: string,
   resolution: Resolution,
   aspectRatio: AspectRatio,
@@ -362,7 +362,14 @@ export const generateDetailExtra = async (
 ): Promise<string> => {
   const parts: any[] = [];
   parts.push(fileToPart(baseImage));
-  if (refImage) parts.push(fileToPart(refImage));
+
+  if (refImages) {
+    if (Array.isArray(refImages)) {
+      refImages.forEach(img => parts.push(fileToPart(img)));
+    } else {
+      parts.push(fileToPart(refImages));
+    }
+  }
 
   const isRoseCut = options?.isRoseCut;
   const hasText = options?.hasText;
@@ -639,7 +646,7 @@ export const analyzeFabric = async (imageInput: string): Promise<FabricAnalysis>
         `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-1.5-flash-002', // Updated to stable 002
       contents: [{ role: 'user', parts: [{ inlineData: { data: base64Data, mimeType: "image/jpeg" } }, { text: prompt }] }],
       config: { responseMimeType: "application/json" }
     });
@@ -680,7 +687,7 @@ export const generateIconSpecs = async (intents: string[], styleTokens: string[]
         `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // Use High Logic Model
+      model: 'gemini-1.5-pro-002', // Use Stable Pro Model
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: { responseMimeType: "application/json" }
     });
@@ -718,7 +725,7 @@ export const generateDynamicCopy = async (analysis: FabricAnalysis, intents: str
         `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash', // Flash is enough for copy
+      model: 'gemini-1.5-flash-002', // Flash is enough for copy
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: { responseMimeType: "application/json" }
     });

@@ -1,130 +1,133 @@
-
 import React from 'react';
-import { CameraAngle, Resolution, AspectRatio, FaceMode, Gender } from '../../types';
-import { POSE_ANGLES, RESOLUTION_OPTIONS, ASPECT_RATIO_OPTIONS, FACE_MODE_OPTIONS, GENDER_OPTIONS } from '../../services/pose/pose.config';
-import CustomSelect from '../CustomSelect';
-import { Monitor, Maximize2, UserCircle, User, AlertCircle, RotateCcw, CornerUpLeft, CornerUpRight, MoveLeft, MoveRight, X, Sparkles } from 'lucide-react';
+import { Camera, Wand2, X } from 'lucide-react';
 
-interface PoseControlsProps {
+export interface PoseControlsProps {
     prompt: string;
-    setPrompt: (val: string) => void;
-    selectedAngles: CameraAngle[];
-    toggleAngle: (angle: CameraAngle) => void;
-    resolution: Resolution;
-    setResolution: (val: Resolution) => void;
-    aspectRatio: AspectRatio;
-    setAspectRatio: (val: AspectRatio) => void;
-    faceMode: FaceMode;
-    setFaceMode: (val: FaceMode) => void;
-    gender: Gender;
-    setGender: (val: Gender) => void;
+    setPrompt: (value: string) => void;
+    selectedAngles: any[]; // Using any[] to match usage, ideally strictly typed if possible but inferred from context
+    toggleAngle: (angle: any) => void;
+    resolution: string;
+    setResolution: (value: any) => void;
+    aspectRatio: any;
+    setAspectRatio: (value: any) => void;
+    faceMode: any;
+    setFaceMode: (value: any) => void;
+    gender: any;
+    setGender: (value: any) => void;
     isLoading: boolean;
     baseImage: string | null;
     handleGenerate: () => void;
     handleStopClick: () => void;
 }
 
-const AngleIcon = ({ angle }: { angle: string }) => {
-    switch (angle) {
-        case 'default': return <RotateCcw className="w-4 h-4" />;
-        case 'front': return <Maximize2 className="w-4 h-4" />;
-        case 'left-30': return <CornerUpLeft className="w-4 h-4" />;
-        case 'left-40': return <CornerUpLeft className="w-4 h-4 rotate-12" />;
-        case 'right-30': return <CornerUpRight className="w-4 h-4" />;
-        case 'right-40': return <CornerUpRight className="w-4 h-4 -rotate-12" />;
-        case 'left-side': return <MoveLeft className="w-4 h-4" />;
-        case 'right-side': return <MoveRight className="w-4 h-4" />;
-        default: return <Maximize2 className="w-4 h-4" />;
-    }
-}
-
 export const PoseControls: React.FC<PoseControlsProps> = ({
-    prompt, setPrompt, selectedAngles, toggleAngle,
-    resolution, setResolution, aspectRatio, setAspectRatio,
-    faceMode, setFaceMode, gender, setGender,
-    isLoading, baseImage, handleGenerate, handleStopClick
+    prompt,
+    setPrompt,
+    selectedAngles,
+    toggleAngle,
+    resolution,
+    setResolution,
+    aspectRatio,
+    setAspectRatio,
+    faceMode,
+    setFaceMode,
+    gender,
+    setGender,
+    isLoading,
+    baseImage,
+    handleGenerate,
+    handleStopClick
 }) => {
     return (
         <div className="space-y-6">
-            <div className="space-y-4">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">카메라 앵글 조절</label>
-                <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-                    {POSE_ANGLES.map((angle) => (
+            {/* 1. Prompt Input */}
+            <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">프롬프트 (선택)</label>
+                <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="원하는 포즈나 분위기를 설명해주세요..."
+                    className="w-full h-24 bg-black border border-white/10 rounded-2xl px-5 py-4 text-xs focus:border-white outline-none transition-all resize-none text-gray-300 placeholder:text-gray-700 font-medium"
+                />
+            </div>
+
+            {/* 2. Angle Selection */}
+            <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">카메라 앵글 (다중 선택 가능)</label>
+                <div className="grid grid-cols-4 gap-2">
+                    {['front', 'left-30', 'right-30', 'back'].map((angle) => (
                         <button
-                            key={angle.id}
-                            onClick={() => toggleAngle(angle.id as CameraAngle)}
-                            className={`flex flex-col items-center gap-2 py-4 rounded-2xl border transition-all ${selectedAngles.includes(angle.id as CameraAngle) ? 'bg-white text-black border-white shadow-xl' : 'bg-black border-white/10 text-gray-600 hover:border-white/30'
+                            key={angle}
+                            onClick={() => toggleAngle(angle)}
+                            className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all border ${selectedAngles.includes(angle)
+                                    ? 'bg-white text-black border-white'
+                                    : 'bg-black text-gray-500 border-white/10 hover:border-white/30'
                                 }`}
                         >
-                            <AngleIcon angle={angle.id} />
-                            <span className="text-[9px] font-black uppercase">{angle.label}</span>
+                            {angle.toUpperCase()}
                         </button>
                     ))}
                 </div>
             </div>
 
-            <div className="space-y-4">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">추가 프롬프트 (선택)</label>
-                <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="특별한 포즈나 설정을 직접 입력하세요..."
-                    className="w-full h-24 bg-black border border-white/10 rounded-2xl px-5 py-4 text-xs focus:border-white outline-none transition-all resize-none text-gray-300 font-medium"
-                />
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-                <CustomSelect
-                    label="해상도"
-                    value={resolution}
-                    onChange={(val) => setResolution(val as Resolution)}
-                    options={RESOLUTION_OPTIONS}
-                    icon={<Monitor className="w-4 h-4" />}
-                />
-                <CustomSelect
-                    label="비율"
-                    value={aspectRatio}
-                    onChange={(val) => setAspectRatio(val as AspectRatio)}
-                    options={ASPECT_RATIO_OPTIONS}
-                    icon={<Maximize2 className="w-4 h-4" />}
-                />
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-                <CustomSelect
-                    label="얼굴 보정 (Face)"
-                    value={faceMode}
-                    onChange={(val) => setFaceMode(val as FaceMode)}
-                    options={FACE_MODE_OPTIONS}
-                    icon={<UserCircle className="w-4 h-4" />}
-                />
-                <CustomSelect
-                    label="모델 성별"
-                    value={gender}
-                    onChange={(val) => setGender(val as Gender)}
-                    options={GENDER_OPTIONS}
-                    icon={<User className="w-4 h-4" />}
-                    disabled={faceMode === 'HEADLESS' || faceMode === 'OFF'}
-                />
-            </div>
-
-            {faceMode === 'HEADLESS' && (
-                <div className="p-4 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl animate-in fade-in">
-                    <div className="flex items-start gap-3">
-                        <div className="p-2 bg-indigo-500/20 rounded-lg">
-                            <AlertCircle className="w-4 h-4 text-indigo-400" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-indigo-300 mb-1">헤드리스 모드 (Headless Mode)</p>
-                            <p className="text-[10px] text-indigo-200/70 leading-relaxed">
-                                얼굴을 자동으로 제거하고 목 아래 부분만 크롭합니다.<br />
-                                포즈 변경이나 배경 변경 없이, 오직 얼굴만 제거된 상품 중심 이미지가 생성됩니다.
-                            </p>
-                        </div>
-                    </div>
+            {/* 3. Settings Grid */}
+            <div className="grid grid-cols-2 gap-4">
+                {/* Face Mode */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">페이스 모드</label>
+                    <select
+                        value={faceMode}
+                        onChange={(e) => setFaceMode(e.target.value)}
+                        className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-[11px] font-black focus:border-white outline-none appearance-none cursor-pointer"
+                    >
+                        <option value="ON">ON (얼굴 유지/생성)</option>
+                        <option value="OFF">OFF (얼굴 제외/크롭)</option>
+                        <option value="HEADLESS">HEADLESS (목 아래만)</option>
+                    </select>
                 </div>
-            )}
 
+                {/* Gender */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">성별</label>
+                    <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value)}
+                        className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-[11px] font-black focus:border-white outline-none appearance-none cursor-pointer"
+                    >
+                        <option value="Female">여성</option>
+                        <option value="Male">남성</option>
+                    </select>
+                </div>
+
+                {/* Resolution */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">해상도</label>
+                    <select
+                        value={resolution}
+                        onChange={(e) => setResolution(e.target.value)}
+                        className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-[11px] font-black focus:border-white outline-none appearance-none cursor-pointer"
+                    >
+                        <option value="1K">1K (기본)</option>
+                        <option value="2K">2K (고화질)</option>
+                    </select>
+                </div>
+
+                {/* Ratio */}
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">비율</label>
+                    <select
+                        value={aspectRatio}
+                        onChange={(e) => setAspectRatio(e.target.value)}
+                        className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-[11px] font-black focus:border-white outline-none appearance-none cursor-pointer"
+                    >
+                        <option value="3:4">3:4 (인물)</option>
+                        <option value="1:1">1:1 (정방형)</option>
+                        <option value="9:16">9:16 (세로형)</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Action Button */}
             {isLoading ? (
                 <button
                     onClick={handleStopClick}
@@ -136,11 +139,11 @@ export const PoseControls: React.FC<PoseControlsProps> = ({
             ) : (
                 <button
                     onClick={handleGenerate}
-                    disabled={!baseImage}
+                    disabled={!baseImage || selectedAngles.length === 0}
                     className="w-full py-6 rounded-[2rem] bg-white hover:bg-gray-200 text-black font-black text-sm shadow-2xl shadow-white/10 disabled:opacity-20 transition-all flex items-center justify-center gap-4 group"
                 >
-                    <Sparkles className="w-6 h-6" />
-                    포즈 렌더링 실행 (선택 {selectedAngles.length}개)
+                    <Wand2 className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+                    포즈 생성 실행 ({selectedAngles.length}개)
                 </button>
             )}
         </div>
