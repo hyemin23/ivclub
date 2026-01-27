@@ -201,6 +201,10 @@ export class BSEPipeline {
 
     private async stageA_Segmentation(buffer: Buffer, w: number, h: number): Promise<{ masks: any }> {
         // Determine masks based on source alpha or mock logic
+        // Fix: Extract raw data for pixel access
+        const rawBuffer = await sharp(buffer).ensureAlpha().raw().toBuffer();
+        const data = new Uint8ClampedArray(rawBuffer);
+
         // For this engine to work efficiently, we expect the input source_image to be ALREADY removed background (png with alpha).
         // The SRS says "Input: source_image ... Stage A: Segmentation".
         // If input is JPEG, we must run removal.

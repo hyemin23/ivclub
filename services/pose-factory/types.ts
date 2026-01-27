@@ -13,6 +13,7 @@ export interface VariantGroupInput {
         label: string;
         image_id?: string; // Palette Source
         hex_override?: string; // Optional Force Hex
+        mode?: 'auto' | 'solid_paint' | 'texture_transfer'; // SRS v2.6
     }[];
 }
 
@@ -48,6 +49,14 @@ export interface CVFConfig {
         ssim_min?: number; // 0.82 (updated from 0.78)
         edge_iou_min?: number; // 0.75 (updated from 0.70)
         delta_e_max?: number; // 8.0
+    };
+    // SRS v2.6: Texture Transfer Params
+    transfer_strength?: number; // 0.0 ~ 1.0 (default 0.95)
+    lighting_preservation?: 'low' | 'medium' | 'high'; // default 'high'
+    generationConfig?: {
+        temperature?: number;
+        output_modality?: 'IMAGE' | 'TEXT';
+        [key: string]: any;
     };
 }
 

@@ -2,11 +2,10 @@
 /**
  * Pigment Studio Mask Engineering Service
  * Implements SRS 2.3: Mathematical Composition
+ * REFACRORED: Uses 'sharp' for Server-Side execution (Node.js) instead of DOM Canvas.
  */
 
-// Basic Canvas Helper for Node/Server-side emulation or Client-side Offscreen
-// We assume browser environment (or Node with canvas lib support if tailored)
-// For Next.js client-side, purely DOM Canvas is used.
+import sharp from 'sharp';
 
 export interface SegmentationResult {
     mask_person: string; // Base64 Data URI
@@ -19,119 +18,114 @@ export interface SegmentationResult {
 }
 
 // --------------------------------------------------------
+// 0. Sharp Helpers
+// --------------------------------------------------------
+
+const base64ToBuffer = (base64: string): Buffer => {
+    const data = base64.replace(/^data:image\/\w+;base64,/, "");
+    return Buffer.from(data, 'base64');
+};
+
+const bufferToBase64 = async (buffer: Buffer): Promise<string> => {
+    const b64 = buffer.toString('base64');
+    return `data:image/png;base64,${b64}`; // Always PNG for masks
+};
+
+const ensurePngBuffer = async (input: string | Buffer): Promise<Buffer> => {
+    const buf = typeof input === 'string' ? base64ToBuffer(input) : input;
+    // ensure uniform format if needed, but sharp handles inputs well.
+    return buf;
+};
+
+// --------------------------------------------------------
 // 1. Primitive Operations (Dilate, Erode, Boolean)
 // --------------------------------------------------------
 
-const createCanvas = (w: number, h: number) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    return canvas;
-};
-
-const loadImage = (src: string): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = src;
-    });
-};
-
 /**
  * Applies Dilation (Expansion) to a mask
+ * Using Sharp: Blur + Threshold (Approximation of Dilation)
  * @param maskDataURI 
  * @param radius 
  */
 export const dilateMask = async (maskDataURI: string, radius: number): Promise<string> => {
+    if (!maskDataURI) return "";
     if (radius <= 0) return maskDataURI;
 
-    const img = await loadImage(maskDataURI);
-    const canvas = createCanvas(img.width, img.height);
-    const ctx = canvas.getContext('2d')!;
+    try {
+        const inputBuffer = base64ToBuffer(maskDataURI);
 
-    // Draw original
-    ctx.drawImage(img, 0, 0);
+        // Dilation via Blur + Threshold
+        // Blurring spreads the white pixels. Thresholding lower captures that spread.
+        // Sigma for blur: roughly radius / 2 for similar visual spread
+        const sigma = Math.max(0.3, radius / 2);
 
-    // Apply dilation via shadow blur or filter (Approximate for perf)
-    // More accurate way: Multi-pass draw
-    // For MVP: multiple shadow draws
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.shadowColor = '#FFFFFF';
-    ctx.shadowBlur = radius; // Warning: shadowBlur is Gaussian-ish, SRS asks for dilate. 
-    // Usually acceptable for "Safety Margin".
-    // For strict math, we might need checking pixels, but Canvas 'filter' is heavy.
-    // Using multiple draw passes with offset for better dilation approximation:
+        const processed = await sharp(inputBuffer)
+            .blur(sigma)
+            .threshold(50) // Capture the spread (expand)
+            .toBuffer();
 
-    const steps = Math.ceil(radius / 2);
-    // Cheap dilation
-    const tempCanvas = createCanvas(img.width, img.height);
-    const tCtx = tempCanvas.getContext('2d')!;
-    tCtx.drawImage(img, 0, 0);
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Draw center
-    ctx.drawImage(tempCanvas, 0, 0);
-
-    // Draw 8-way offset
-    for (let r = 1; r <= steps; r += 2) { // sparse sampling
-        const off = r * 2;
-        ctx.drawImage(tempCanvas, off, 0);
-        ctx.drawImage(tempCanvas, -off, 0);
-        ctx.drawImage(tempCanvas, 0, off);
-        ctx.drawImage(tempCanvas, 0, -off);
-        ctx.drawImage(tempCanvas, off, off);
-        ctx.drawImage(tempCanvas, -off, -off);
-        ctx.drawImage(tempCanvas, off, -off);
-        ctx.drawImage(tempCanvas, -off, off);
+        return await bufferToBase64(processed);
+    } catch (e) {
+        console.error("Mask Dilation Failed", e);
+        return maskDataURI; // Fallback
     }
-
-    // Threshold back to binary
-    // ... complex in canvas without pixel manip.
-    // Return simple blurred version for now (Safe approximation)
-    return canvas.toDataURL();
 };
 
 /**
  * Boolean Subtract: A - B
+ * Sharp: Composite A with B using 'dest-out' (Removes B from A)
  */
 export const subtractMask = async (maskA: string, maskB: string): Promise<string> => {
-    const imgA = await loadImage(maskA);
-    const imgB = await loadImage(maskB);
+    if (!maskA) return "";
+    if (!maskB) return maskA;
 
-    const canvas = createCanvas(imgA.width, imgA.height);
-    const ctx = canvas.getContext('2d')!;
+    try {
+        const bufferA = base64ToBuffer(maskA);
+        const bufferB = base64ToBuffer(maskB);
 
-    // Draw A
-    ctx.drawImage(imgA, 0, 0);
+        // Ensure resizing B to A? Assuming same dimensions from pipeline.
+        // If not, might crash. Pipeline should guarantee same dim.
 
-    // Cut B (Destination Out)
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.drawImage(imgB, 0, 0);
+        const processed = await sharp(bufferA)
+            .composite([{
+                input: bufferB,
+                blend: 'dest-out'
+            }])
+            .png()
+            .toBuffer();
 
-    return canvas.toDataURL();
+        return await bufferToBase64(processed);
+    } catch (e) {
+        console.error("Mask Subtract Failed", e);
+        return maskA; // Fallback
+    }
 };
 
 /**
  * Boolean Intersect: A AND B
+ * Sharp: Composite A with B using 'dest-in' (Keeps only overlap)
+ * Or 'in' blend mode.
  */
 export const intersectMask = async (maskA: string, maskB: string): Promise<string> => {
-    const imgA = await loadImage(maskA);
-    const imgB = await loadImage(maskB);
+    if (!maskA || !maskB) return "";
 
-    const canvas = createCanvas(imgA.width, imgA.height);
-    const ctx = canvas.getContext('2d')!;
+    try {
+        const bufferA = base64ToBuffer(maskA);
+        const bufferB = base64ToBuffer(maskB);
 
-    // Draw A
-    ctx.drawImage(imgA, 0, 0);
+        const processed = await sharp(bufferA)
+            .composite([{
+                input: bufferB,
+                blend: 'dest-in'
+            }])
+            .png()
+            .toBuffer();
 
-    // Mask with B (Destination In)
-    ctx.globalCompositeOperation = 'destination-in';
-    ctx.drawImage(imgB, 0, 0);
-
-    return canvas.toDataURL();
+        return await bufferToBase64(processed);
+    } catch (e) {
+        console.error("Mask Intersect Failed", e);
+        return ""; // Safe fallback being empty
+    }
 };
 
 

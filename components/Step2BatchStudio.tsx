@@ -14,6 +14,7 @@ interface ColorVariant {
     label: string;
     hex?: string;
     imageId?: string; // Palette Source
+    mode: 'auto' | 'solid_paint' | 'texture_transfer'; // SRS v2.6
 }
 
 // --- API Client ---
@@ -36,10 +37,7 @@ const Step2BatchStudio: React.FC = () => {
 
     // UI #2: Variant Group
     const [originalImage, setOriginalImage] = useState<string | null>(null); // The TRUE Base
-    const [colorVariants, setColorVariants] = useState<ColorVariant[]>([
-        { id: 'c1', label: 'Navy' },
-        { id: 'c2', label: 'Ivory' }
-    ]);
+    const [colorVariants, setColorVariants] = useState<ColorVariant[]>([]);
 
     // Config
     const [headless, setHeadless] = useState(true);
@@ -81,7 +79,6 @@ const Step2BatchStudio: React.FC = () => {
             const data: CVFStreamEvent_ItemCompleted = JSON.parse(e.data);
             setResults(prev => {
                 const list = prev[data.group] || [];
-                // Dedupe logic could be added here
                 return { ...prev, [data.group]: [...list, data] };
             });
         });
@@ -116,7 +113,8 @@ const Step2BatchStudio: React.FC = () => {
                         color_references: colorVariants.map(c => ({
                             label: c.label,
                             hex_override: c.hex,
-                            image_id: c.imageId
+                            image_id: c.imageId,
+                            mode: c.mode // Pass mode
                         }))
                     }
                 },
@@ -124,10 +122,13 @@ const Step2BatchStudio: React.FC = () => {
                     mode: 'VARIANT_GROUP_ONLY',
                     headless,
                     background_lock: bgLock,
-                    recolor_mode: 'paint_only', // SRS 2.3 Strict Mode
+                    recolor_mode: 'paint_only', // SRS 2.3 Strict Mode (Global Fallback)
                     isolation: true, // SRS 4.0 Job Isolation
                     pose_angles: ['FRONT', 'LEFT_15', 'RIGHT_15'], // Micro-Pose
-                    pose_angles: ['FRONT', 'LEFT_15', 'RIGHT_15'],
+                    // SRS v2.6 Params
+                    transfer_strength: 0.95,
+                    lighting_preservation: 'high',
+
                     pose_variation: {
                         enabled: true,
                         intensity: 0.3,
@@ -309,22 +310,88 @@ const Step2BatchStudio: React.FC = () => {
                             </div>
 
                             {/* Color Refs */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase">Color References (Palette)</label>
+                            <div className="space-y-3">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase flex justify-between">
+                                    <span>Color References (Palette)</span>
+                                    <span className="text-[9px] text-slate-600">Dynamic List</span>
+                                </label>
+
                                 {colorVariants.map((c, i) => (
-                                    <div key={c.id} className="flex gap-2 items-center bg-slate-900 p-2 rounded-lg border border-white/5">
-                                        <div className="w-10 h-10 rounded bg-slate-800 shrink-0 relative overflow-hidden group cursor-pointer border border-white/10">
-                                            {c.imageId && <img src={c.imageId} className="w-full h-full object-cover" />}
-                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUpload((v) => {
-                                                const cw = [...colorVariants]; cw[i].imageId = v; setColorVariants(cw);
-                                            })} />
+                                    <div key={c.id} className="flex flex-col gap-2 bg-slate-900 p-3 rounded-xl border border-white/5 relative group">
+                                        <div className="flex items-center gap-3">
+                                            {/* Image Uploader */}
+                                            <div className="w-12 h-12 rounded-lg bg-slate-800 shrink-0 relative overflow-hidden hover:border-indigo-500 border border-white/10 transition-colors">
+                                                {c.imageId ? (
+                                                    <img src={c.imageId} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center text-white/20"><Plus className="w-4 h-4" /></div>
+                                                )}
+                                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUpload((v) => {
+                                                    const cw = [...colorVariants];
+                                                    cw[i].imageId = v;
+                                                    // Auto-switch to texture mode if image added? Or let user decide. 
+                                                    // SRS says: Toggle switch. Default Auto.
+                                                    setColorVariants(cw);
+                                                })} />
+                                            </div>
+
+                                            {/* Inputs */}
+                                            <div className="flex-1 min-w-0">
+                                                <input
+                                                    className="bg-transparent text-sm font-bold w-full outline-none placeholder:text-slate-600"
+                                                    value={c.label}
+                                                    placeholder="Color Name"
+                                                    onChange={(e) => {
+                                                        const cw = [...colorVariants]; cw[i].label = e.target.value; setColorVariants(cw);
+                                                    }}
+                                                />
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    {/* Texture Mode Indicator/Toggle */}
+                                                    {c.imageId && (
+                                                        <button
+                                                            onClick={() => {
+                                                                const cw = [...colorVariants];
+                                                                // Toggle logic: auto -> texture -> solid -> auto ? Or simple Toggle.
+                                                                // Simple: Texture vs Solid.
+                                                                const nextMode = c.mode === 'texture_transfer' ? 'solid_paint' : 'texture_transfer';
+                                                                cw[i].mode = nextMode;
+                                                                setColorVariants(cw);
+                                                            }}
+                                                            className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border transition-all ${c.mode === 'texture_transfer'
+                                                                ? 'bg-pink-500/10 border-pink-500 text-pink-400'
+                                                                : 'bg-indigo-500/10 border-indigo-500/50 text-indigo-400'
+                                                                }`}
+                                                            title="Toggle Texture Transfer Mode"
+                                                        >
+                                                            <div className={`w-1.5 h-1.5 rounded-full ${c.mode === 'texture_transfer' ? 'bg-pink-500' : 'bg-indigo-500'}`} />
+                                                            <span className="text-[9px] font-bold uppercase tracking-tight">
+                                                                {c.mode === 'texture_transfer' ? 'Texture' : 'Paint'}
+                                                            </span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Delete */}
+                                            <button
+                                                onClick={() => {
+                                                    const cw = colorVariants.filter((_, idx) => idx !== i);
+                                                    setColorVariants(cw);
+                                                }}
+                                                className="p-2 text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
-                                        <input className="bg-transparent text-sm font-bold w-full outline-none" value={c.label} onChange={(e) => {
-                                            const cw = [...colorVariants]; cw[i].label = e.target.value; setColorVariants(cw);
-                                        }} />
                                     </div>
                                 ))}
-                                <button onClick={() => setColorVariants([...colorVariants, { id: Date.now().toString(), label: "New" }])} className="w-full py-2 bg-slate-800 rounded-lg text-xs font-bold hover:bg-slate-700">+ Add Color</button>
+
+                                <button
+                                    onClick={() => setColorVariants([...colorVariants, { id: Date.now().toString(), label: "New Color", mode: 'auto' }])}
+                                    className="w-full py-3 bg-slate-800/50 border border-white/5 rounded-xl text-xs font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Plus className="w-3 h-3" /> Add Color Variant
+                                </button>
                             </div>
                         </div>
 

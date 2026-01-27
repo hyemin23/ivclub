@@ -1,6 +1,7 @@
 
-import { SizeRecord, SizeColumn } from '../types';
+import { SizeRecord, SizeColumn } from '@/types';
 
+// Standard Extract from Text
 export const extractSizeFromText = async (text: string): Promise<SizeRecord[]> => {
     // Mock Implementation
     console.log("Extracting size from text:", text.substring(0, 20) + "...");
@@ -11,6 +12,7 @@ export const extractSizeFromText = async (text: string): Promise<SizeRecord[]> =
     ];
 };
 
+// Standard Extract from Image (Mock)
 export const extractSizeFromImage = async (imageUrl: string): Promise<SizeRecord[]> => {
     // Mock Implementation
     console.log("Extracting size from image...");
@@ -27,4 +29,32 @@ export const detectColumns = (records: SizeRecord[]): SizeColumn[] => {
         label: k.charAt(0).toUpperCase() + k.slice(1),
         key: k
     }));
+};
+
+// --- Added for API Compatibility ---
+
+export const extractSizeChart = async (sourceId: string, hint?: string) => {
+    console.log(`[Service] Extracting Size Chart for ${sourceId} with hint ${hint}`);
+    // Determine input type (URL or ID) -> Logic TBD
+    // For now, assume it's an image URL for the build
+    const records = await extractSizeFromImage(sourceId);
+    return {
+        status: 'success',
+        data: {
+            columns: detectColumns(records),
+            rows: records
+        }
+    };
+};
+
+export const fallbackToVisionLLM = async (sourceId: string, hint?: string) => {
+    console.log(`[Service] Vision Fallback for ${sourceId}`);
+    const records = await extractSizeFromText("Mock Vision Data");
+    return {
+        status: 'success',
+        data: {
+            columns: detectColumns(records),
+            rows: records
+        }
+    };
 };

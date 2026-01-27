@@ -111,11 +111,15 @@ export class CVFPipeline {
                     mirrorRequired = true; // Flag for UI/Result
                 }
 
+                // CRITICAL FIX: Ensure 'pose' variable in loop is used for Result Mapping
+                // The 'effectivePose' is only for internal generation.
+                // The 'pose' (RIGHT_15) must be passed to the result event.
+
                 // Stage 4 & 5: Render & QA with Retry Policy (SRS 3.3)
                 // Retry once if QA fails or Gen fails
                 const MAX_RETRIES = 1;
                 let attempt = 0;
-                let qaScores = null;
+                let qaScores: { ssim: number; edge_iou: number; delta_e: number; passed: boolean; } | undefined;
                 let renderResult = null;
                 let isSuccess = false;
 

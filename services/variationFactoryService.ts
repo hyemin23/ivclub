@@ -240,10 +240,12 @@ const generatePose = async (base: string, pose: PoseType, useMicroVar: boolean, 
             promptModifier = "Full body standing, 0 degree, strict front view.";
             break;
         case 'LEFT_15':
-            promptModifier = "Turn body 15 degrees to the left. 3/4 view. Keep face forward.";
+            // Model turns to THEIR Left (Viewer's Right?) No, usually "Turn Left" means facing Left.
+            promptModifier = "Turn body 15 degrees to the LEFT. (Model faces left). Right shoulder is slightly closer to camera. 3/4 view.";
             break;
         case 'RIGHT_15':
-            promptModifier = "Turn body 15 degrees to the right. 3/4 view. Keep face forward.";
+            // Model turns to THEIR Right.
+            promptModifier = "Turn body 15 degrees to the RIGHT. (Model faces right). Left shoulder is slightly closer to camera. 3/4 view. Ensure distinct RIGHT rotation.";
             break;
     }
 

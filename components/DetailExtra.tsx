@@ -20,6 +20,7 @@ const DetailExtra: React.FC = () => {
     imageCount, setImageCount,
     resultImages,
     isLoading,
+    isAnalyzing,
     selectedImage, setSelectedImage,
     fabricText, setFabricText,
     uspKeywords, setUspKeywords,
@@ -77,6 +78,7 @@ const DetailExtra: React.FC = () => {
               isLoading={isLoading}
               baseImage={baseImage}
               handleGenerate={handleGenerate}
+              isAnalyzing={isAnalyzing}
             />
           </div>
         </div>

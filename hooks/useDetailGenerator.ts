@@ -22,6 +22,41 @@ export const useDetailGenerator = () => {
     const [fabricText, setFabricText] = useState('');
     const [uspKeywords, setUspKeywords] = useState('');
 
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    const analyzeImage = async (imageInput: string) => {
+        if (!imageInput) return;
+        setIsAnalyzing(true);
+        try {
+            console.log("Starting Fabric Analysis...");
+            const analysis = await analyzeFabric(imageInput);
+
+            // 1. Auto-fill Fabric Text
+            if (analysis.material && analysis.material.length > 0) {
+                // Formatting: "Cotton 100%" style if possible, but Gemini returns keywords.
+                // We'll join them comfortably.
+                setFabricText(analysis.material.join(', '));
+            }
+
+            // 2. Auto-fill USP Keywords
+            const keywords = [
+                ...(analysis.features || []),
+                ...(analysis.quality || [])
+            ];
+            // Filter duplicates and empty strings
+            const uniqueKeywords = Array.from(new Set(keywords)).filter(Boolean);
+
+            if (uniqueKeywords.length > 0) {
+                setUspKeywords(uniqueKeywords.slice(0, 5).join(', '));
+            }
+
+        } catch (e) {
+            console.error("Auto Analysis Failed:", e);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
     const handleStyleSelect = (styleId: string) => {
         setSelectedStyle(styleId);
         const preset = STYLE_PRESETS.find(s => s.id === styleId);
@@ -44,6 +79,7 @@ export const useDetailGenerator = () => {
                         if (!baseImage) {
                             setBaseImage(result);
                             setBaseImages([result]);
+                            analyzeImage(result);
                         }
                         else if (refImages.length === 0) {
                             setRefImage(result);
@@ -52,6 +88,7 @@ export const useDetailGenerator = () => {
                         else {
                             setBaseImage(result);
                             setBaseImages([result]);
+                            analyzeImage(result);
                         }
                     };
                     reader.readAsDataURL(blob);
@@ -82,6 +119,7 @@ export const useDetailGenerator = () => {
             Promise.all(readers).then(results => {
                 setBaseImages(results);
                 setBaseImage(results[0]); // Set first as main
+                analyzeImage(results[0]); // Trigger Analysis
                 e.target.value = '';
             });
         } else {
@@ -122,10 +160,28 @@ export const useDetailGenerator = () => {
                 let finalUspData = [];
                 try {
                     // 1. Vision Analysis
+                    // If we already have auto-filled text, use it? 
+                    // Or re-analyze? 
+                    // Current logic: analyzeFabric again inside render pipeline.
+                    // Optimizations: We could reuse valid inputs if present.
+                    // For now, let's keep the pipeline robust by re-analyzing or using inputs.
+
+                    // Actually, if user modified the Inputs, we should use them!
+                    // But generateIconSpecs needs "intents".
+                    // Let's rely on standard pipeline for now, or improve it later.
+                    // Standard pipeline:
+
                     const analysis = await analyzeFabric(baseImage);
 
                     // 2. Determine Intents (Top 4 keywords)
-                    const intents = [...analysis.material, ...analysis.features, ...analysis.quality].slice(0, 4);
+                    // If user provided Keywords, use them as intents!
+                    let intents: string[] = [];
+                    if (uspKeywords && uspKeywords.trim().length > 0) {
+                        intents = uspKeywords.split(',').map(s => s.trim()).filter(Boolean).slice(0, 4);
+                    } else {
+                        intents = [...analysis.material, ...analysis.features, ...analysis.quality].slice(0, 4);
+                    }
+
                     if (intents.length === 0) intents.push("Quality", "Material", "Fit", "Detail"); // Fallback intents
 
                     // 3. Generate Icon Specs & Copy in Parallel
@@ -240,6 +296,7 @@ export const useDetailGenerator = () => {
         imageCount, setImageCount,
         resultImages, setResultImages,
         isLoading, setIsLoading,
+        isAnalyzing, // NEW
         selectedImage, setSelectedImage,
         fabricText, setFabricText,
         uspKeywords, setUspKeywords,

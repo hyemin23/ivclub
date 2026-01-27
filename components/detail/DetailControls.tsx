@@ -21,6 +21,7 @@ interface DetailControlsProps {
     isLoading: boolean;
     baseImage: string | null;
     handleGenerate: () => void;
+    isAnalyzing?: boolean;
 }
 
 export const DetailControls: React.FC<DetailControlsProps> = ({
@@ -31,7 +32,8 @@ export const DetailControls: React.FC<DetailControlsProps> = ({
     imageCount, setImageCount,
     fabricText, setFabricText,
     uspKeywords, setUspKeywords,
-    isLoading, baseImage, handleGenerate
+    isLoading, baseImage, handleGenerate,
+    isAnalyzing = false
 }) => {
     return (
         <div className="space-y-6">
@@ -55,15 +57,28 @@ export const DetailControls: React.FC<DetailControlsProps> = ({
 
             {/* Rose Cut Extra Inputs */}
             {selectedStyle === 'rose-cut' && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 p-4 bg-slate-900/50 rounded-xl border border-slate-800">
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2 p-4 bg-slate-900/50 rounded-xl border border-slate-800 relative overflow-hidden">
+                    {isAnalyzing && (
+                        <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-[1px] z-10 flex items-center justify-center pointer-events-none">
+                            <div className="bg-indigo-600/90 text-white px-3 py-1.5 rounded-full text-[10px] font-bold shadow-xl animate-pulse flex items-center gap-2">
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                                Analyzing Pattern...
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">원단 텍스트 입력</label>
+                        <div className="flex justify-between items-center">
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">원단 텍스트 입력</label>
+                            {isAnalyzing && <span className="text-[9px] text-indigo-400 font-bold animate-pulse">AUTO DETECTING...</span>}
+                        </div>
                         <input
                             type="text"
                             value={fabricText}
                             onChange={(e) => setFabricText(e.target.value)}
-                            placeholder="예: COTTON 100%"
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-[11px] focus:border-indigo-400 outline-none transition-all text-slate-300"
+                            placeholder={isAnalyzing ? "Analyzing material..." : "예: COTTON 100%"}
+                            disabled={isAnalyzing}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-[11px] focus:border-indigo-400 outline-none transition-all text-slate-300 disabled:opacity-50"
                         />
                     </div>
                     <div className="space-y-2">

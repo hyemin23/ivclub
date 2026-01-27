@@ -21,7 +21,7 @@ const NoticeBlock: React.FC<NoticeBlockProps> = ({ content, isExporting, onUpdat
         setNodeRef,
         transform,
         transition,
-    } = useSortable({ id: `notice-${Math.random()}` }); // Note: Ideally ID should be passed in props for sorting to work perfectly
+    } = useSortable({ id: `notice-${React.useId()}` }); // Note: Ideally ID should be passed in props for sorting to work perfectly
 
     const style = {
         transform: CSS.Transform.toString(transform),
