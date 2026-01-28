@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from 'react';
-import { MapPin, GripVertical, X, Plus, Sparkles } from 'lucide-react';
+import { MapPin, X, Plus, Sparkles } from 'lucide-react';
 import { SmartPin } from '@/types';
 
 interface PinBlockProps {

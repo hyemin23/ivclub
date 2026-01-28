@@ -31,9 +31,9 @@ export const SidebarGroup: React.FC<SidebarGroupProps> = ({ group, isSidebarOpen
 
   // Update expansion when appView changes (auto-expand logic)
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    if (isActiveGroup && !isExpanded) setIsExpanded(true);
-  }, [appView, isActiveGroup]);
+    // eslint-disable-next-line
+    if (isActiveGroup) setIsExpanded(true);
+  }, [isActiveGroup]);
 
   return (
     <div className="space-y-2">

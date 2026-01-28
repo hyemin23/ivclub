@@ -23,7 +23,7 @@ const LookbookStudio: React.FC = () => {
   const createLookbookSet = async () => {
     if (!baseImage || !description) return;
     setIsGenerating(true);
-    
+
     const id = Math.random().toString(36).substring(7);
     // Fixed: Removed unsupported 'type' property from LookbookImage
     addLookbookImage({ id, url: '', pose: 'Custom Studio Pose', isGenerating: true });
@@ -31,7 +31,7 @@ const LookbookStudio: React.FC = () => {
     try {
       const base64Data = baseImage.split(',')[1] || baseImage;
       // Fixed: generateLookbookImage now implemented in geminiService
-      const url = await generateLookbookImage(base64Data, description, analysis || undefined, '1K');
+      const url = await generateLookbookImage(base64Data, description, analysis!, '1K');
       updateLookbookImage(id, { url, isGenerating: false });
     } catch (error) {
       console.error(error);
@@ -51,11 +51,11 @@ const LookbookStudio: React.FC = () => {
               <Sparkles className="w-6 h-6 text-indigo-400" />
               AI 룩북 스튜디오
             </h3>
-            
+
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-xs text-slate-500 font-bold ml-1 uppercase tracking-wider">옷 정보 입력 (Color/Fit/Material)</label>
-                <textarea 
+                <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="예: Oversized sky blue linen shirt with a relaxed fit"
@@ -65,9 +65,8 @@ const LookbookStudio: React.FC = () => {
 
               <div className="flex gap-3">
                 <div className="flex-1 relative group">
-                  <div className={`aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all cursor-pointer overflow-hidden ${
-                    baseImage ? 'border-indigo-500 bg-indigo-500/5' : 'border-slate-800 hover:border-slate-700 bg-slate-950'
-                  }`}>
+                  <div className={`aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center transition-all cursor-pointer overflow-hidden ${baseImage ? 'border-indigo-500 bg-indigo-500/5' : 'border-slate-800 hover:border-slate-700 bg-slate-950'
+                    }`}>
                     {baseImage ? (
                       <img src={baseImage} className="w-full h-full object-cover" />
                     ) : (
@@ -80,7 +79,7 @@ const LookbookStudio: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex-1 flex flex-col gap-3">
-                  <button 
+                  <button
                     onClick={createLookbookSet}
                     disabled={isGenerating || !baseImage || !description}
                     className="flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-sm shadow-xl shadow-indigo-500/20 transition-all flex flex-col items-center justify-center gap-2"
@@ -94,23 +93,23 @@ const LookbookStudio: React.FC = () => {
           </div>
 
           <div className="bg-slate-950/50 rounded-2xl p-6 border border-slate-800/50 flex flex-col justify-center">
-             <div className="flex items-center gap-2 text-indigo-400 mb-2">
-               <Maximize2 className="w-4 h-4" />
-               <span className="text-xs font-bold uppercase tracking-widest">Headless Strategy</span>
-             </div>
-             <p className="text-xs text-slate-500 leading-relaxed mb-4">
-               AI싱크클럽은 모델의 초상권을 보호하고 옷의 퀄리티에 집중하기 위해 얼굴을 제외한 '넥-다운(Neck-down)' 크롭 스타일을 기본으로 합니다. 이는 버티컬 커머스에서 높은 클릭률과 전환율을 기록하는 검증된 연출 방식입니다.
-             </p>
-             <div className="grid grid-cols-2 gap-2">
-               <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
-                 <span className="text-[10px] text-slate-500 font-bold block mb-1">SET A</span>
-                 <span className="text-xs text-white">전신 룩북 (9:16)</span>
-               </div>
-               <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
-                 <span className="text-[10px] text-slate-500 font-bold block mb-1">SET B</span>
-                 <span className="text-xs text-white">디테일 컷 (1:1)</span>
-               </div>
-             </div>
+            <div className="flex items-center gap-2 text-indigo-400 mb-2">
+              <Maximize2 className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-widest">Headless Strategy</span>
+            </div>
+            <p className="text-xs text-slate-500 leading-relaxed mb-4">
+              AI싱크클럽은 모델의 초상권을 보호하고 옷의 퀄리티에 집중하기 위해 얼굴을 제외한 '넥-다운(Neck-down)' 크롭 스타일을 기본으로 합니다. 이는 버티컬 커머스에서 높은 클릭률과 전환율을 기록하는 검증된 연출 방식입니다.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-500 font-bold block mb-1">SET A</span>
+                <span className="text-xs text-white">전신 룩북 (9:16)</span>
+              </div>
+              <div className="p-3 bg-slate-900 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-500 font-bold block mb-1">SET B</span>
+                <span className="text-xs text-white">디테일 컷 (1:1)</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -141,7 +140,7 @@ const LookbookStudio: React.FC = () => {
             </div>
           </div>
         ))}
-        
+
         {lookbookImages.length === 0 && !isGenerating && (
           <div className="col-span-full py-20 border-2 border-dashed border-slate-800 rounded-3xl flex flex-col items-center justify-center text-slate-600">
             <LayoutGrid className="w-10 h-10 mb-4 opacity-20" />

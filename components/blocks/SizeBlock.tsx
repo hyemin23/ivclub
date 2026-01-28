@@ -2,11 +2,11 @@ import React from 'react';
 import SizeGuideSystem from '../SizeGuideSystem';
 
 interface SizeBlockProps {
-    content: any;
+    content: Record<string, unknown>;
     isExporting: boolean;
 }
 
-export default function SizeBlock({ content, isExporting }: SizeBlockProps) {
+export default function SizeBlock({ isExporting }: SizeBlockProps) {
     // The content prop might contain category info, but SizeGuideSystem primarily interacts with the store.
     // We pass readOnly based on isExporting.
     return (

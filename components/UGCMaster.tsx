@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from 'react';
-import { Sparkles, Loader2, Download, Zap, FileUp, Smartphone, Users, User, Trash2, CheckCircle, AlertCircle, RotateCcw, ShieldAlert, Key } from 'lucide-react';
-import { toast } from 'sonner';
+import { Sparkles, Loader2, Download, Zap, FileUp, Smartphone, Users, User, Trash2, AlertCircle, RotateCcw, ShieldAlert, Key } from 'lucide-react';
 import LocationGrid from './LocationGrid';
 import { LOCATIONS } from '../constants/ugcPresets';
 import { GenerationConfig, Quality, GenerationResult, Gender, Mode, GeminiErrorType } from '../types';
@@ -52,8 +51,9 @@ const UGCMaster: React.FC = () => {
         stylingCoordination: refined.stylingCoordination || prev.stylingCoordination,
         targetAudience: refined.targetAudience || prev.targetAudience
       }));
-    } catch (err: any) {
-      setError("프롬프트 정제에 실패했습니다. 다시 시도해주세요.");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(`프롬프트 정제에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
     } finally {
       setIsRefining(false);
     }
@@ -80,7 +80,7 @@ const UGCMaster: React.FC = () => {
         imageUrl: res.imageUrl,
         status: 'success'
       } : r));
-    } catch (err: any) {
+    } catch (err: unknown) {
       const parsed = parseGeminiError(err);
       setResults(prev => prev.map(r => r.id === tempId ? {
         ...r,
@@ -129,7 +129,7 @@ const UGCMaster: React.FC = () => {
         imageUrl: res.imageUrl,
         status: 'success'
       } : r));
-    } catch (err: any) {
+    } catch (err: unknown) {
       const parsed = parseGeminiError(err);
       setResults(prev => prev.map(r => r.id === id ? {
         ...r,

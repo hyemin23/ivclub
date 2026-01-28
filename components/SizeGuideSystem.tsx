@@ -2,9 +2,8 @@
 
 import React from 'react';
 import { useStore } from '../store';
-import { SizeCategory, SizeRecord, SizeColumn } from '../types';
+import { extractSizeTableFromImage } from '../services/geminiService';
 import { Camera, Loader2 } from 'lucide-react';
-import { SizeChartResponse } from '../services/sizechart/types';
 
 const SizeGuideSystem: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
     const store = useStore();
@@ -34,80 +33,15 @@ const SizeGuideSystem: React.FC<{ readOnly?: boolean }> = ({ readOnly = false })
 
         setIsExtracting(true);
         try {
-            // 1. Convert File to Base64
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            await new Promise((resolve) => { reader.onload = resolve; });
-            const base64Data = reader.result as string;
+            const result = await extractSizeTableFromImage(file);
+            const { category, sizes } = result;
 
-            // 2. Call v2.1 API
-            const res = await fetch('/api/v1/sizechart/extract', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    source_image_data: base64Data, // API supports this field
-                    category_hint: store.sizeCategory
-                })
-            });
-
-            const result: SizeChartResponse = await res.json();
-
-            if (result.status === 'success' && result.tables.length > 0) {
-                const table = result.tables[0];
-
-                // 3. Update Store Columns
-                // Map API headers to Store headers. Use standard_key as ID.
-                const newColumns: SizeColumn[] = table.headers.map(h => ({
-                    id: h.standard_key,
-                    key: h.standard_key,
-                    label: h.label
-                }));
-
-                // 4. Update Store Rows
-                const newRows: SizeRecord[] = table.rows.map(r => {
-                    const rowData: SizeRecord = {
-                        id: r.row_id,
-                        name: r.size_val
-                    };
-                    // Map cells
-                    Object.entries(r.cells).forEach(([key, cell]) => {
-                        // Prefer raw text or value
-                        rowData[key] = (cell.raw || cell.val || '').toString();
-                    });
-                    return rowData;
-                });
-
-                // Apply to store
-                // Note: We need a way to set columns in store. store has 'updateSizeColumn', 'addSizeColumn', 'removeSizeColumn'.
-                // But no 'setSizeColumns'. We might need to implement logic to replace them or check if 'setSizeTable' handles columns?
-                // Checking store.ts... it has 'setSizeTable' but that only sets rows.
-                // It has 'setSizeCategory' which RESETS columns.
-                // We should probably manually reset columns here using available actions or add a setSizeColumns action.
-                // For now, let's use a workaround: Remove all existing, then Add new.
-                // Or better, update store.ts to have `setSizeColumns` (Plan B).
-                // Actually, let's check `store.ts` again. It has `setSizeCategory` which sets defaults.
-                // We should probably implement `store.overrideSizeSystem(cols, rows)` to be clean.
-                // But for now, let's just assume we can't change store.ts easily and do it client side loop?
-                // No, I can change store.ts. I will add setSizeData action in next step if needed.
-                // Wait, useStore is imported. I can check if I can modify store.ts. Yes I can.
-                // But to avoid multi-file edit in one step, I will use what I have.
-                // I will clear columns by removing them one by one? No that's slow.
-                // I will add a new action to store.ts in a separate step or just do it here if I modify store.ts.
-                // Let's modify store.ts in next step. For now, let's just log the parsed data and alert success.
-                // Actually, I must apply it.
-                // Let's rely on `setSizeCategory` to reset, then `updateSizeColumn`? No headers are different.
-
-                // Hack: We will invoke a newly added store method `setSizeData` which I will implement in store.ts.
-                // So I will write codethat assumes `store.setSizeData(newColumns, newRows)` exists.
-                // @ts-ignore
-                if (store.setSizeData) {
-                    // @ts-ignore
-                    store.setSizeData(newColumns, newRows);
-                } else {
-                    alert("Store update method missing. Please refresh.");
+            if (sizes && sizes.length > 0) {
+                if (category && category !== store.sizeCategory) {
+                    store.setSizeCategory(category);
                 }
-
-                alert(`성공적으로 추출되었습니다! (신뢰도: ${(table.confidence.overall * 100).toFixed(0)}%)`);
+                store.setSizeTable(sizes);
+                alert(`성공적으로 추출되었습니다! (카테고리: ${category || 'Unknown'}, 총 ${sizes.length}개 사이즈)`);
             } else {
                 alert('사이즈 정보를 찾을 수 없습니다.');
             }

@@ -50,25 +50,21 @@ const CustomSelect: React.FC<CustomSelectProps> = ({
   };
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
-      {label && <label className={`text-[10px] font-black uppercase tracking-widest ml-1 mb-2 block ${disabled ? 'text-gray-700' : 'text-gray-500'}`}>{label}</label>}
+    <div className={`relative ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`} ref={dropdownRef}>
+      {label && <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1 mb-2 block">{label}</label>}
       <button
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`w-full bg-black border rounded-xl px-4 py-3 flex items-center justify-between text-xs font-bold transition-all 
-          ${disabled
-            ? 'border-white/5 text-gray-700 cursor-not-allowed bg-white/5'
-            : `border-white/10 hover:border-white/30 text-white ${isOpen ? 'border-white/50 ring-1 ring-white/20' : ''}`
-          }`}
+        className={`w-full bg-black border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between text-xs font-bold transition-all hover:border-white/30 text-white ${isOpen ? 'border-white/50 ring-1 ring-white/20' : ''} ${disabled ? 'cursor-not-allowed bg-gray-900 border-gray-800' : ''}`}
         type="button"
       >
         <div className="flex items-center gap-2">
-          {icon && <span className={disabled ? 'text-gray-700' : 'text-gray-400'}>{icon}</span>}
-          <span className={selectedOption ? (disabled ? 'text-gray-600' : 'text-white') : 'text-gray-500'}>
+          {icon && <span className="text-gray-400">{icon}</span>}
+          <span className={selectedOption ? 'text-white' : 'text-gray-500'}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </div>
-        <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} ${disabled ? 'text-gray-800' : 'text-gray-400'}`} />
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
