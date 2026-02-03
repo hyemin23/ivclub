@@ -147,6 +147,22 @@ export const generateImageVariation = async (baseImage: string, type: 'color' | 
   });
 };
 
+export const generateBackgroundChange = async (
+  baseImage: string,
+  bgRefImage: string | null,
+  prompt: string,
+  resolution: Resolution,
+  aspectRatio: AspectRatio,
+  options?: any,
+  signal?: AbortSignal
+): Promise<string> => {
+  return replaceBackground(baseImage, bgRefImage, prompt, {
+    resolution,
+    aspectRatio,
+    ...options
+  });
+};
+
 export const generateDetailImage = async (baseImage: string, prompt: string): Promise<string> => {
   return replaceBackground(baseImage, null, "Clean white studio background, high quality product photography, " + prompt);
 };

@@ -26,11 +26,11 @@ const FactoryOnePage = dynamic(() => import('@/components/FactoryOnePage'), {
   loading: () => <div className="p-12 text-center text-gray-500">Loading Factory...</div>,
   ssr: false
 });
-const ThumbnailGenerator = dynamic(() => import('@/components/ThumbnailGenerator'), {
-  loading: () => <div className="p-12 text-center text-gray-500">Loading Generator...</div>,
-  ssr: false
-});
-const CreditShop = dynamic(() => import('@/components/CreditShop').then(mod => mod.CreditShop), { ssr: false });
+// const ThumbnailGenerator = dynamic(() => import('@/components/ThumbnailGenerator'), {
+//   loading: () => <div className="p-12 text-center text-gray-500">Loading Generator...</div>,
+//   ssr: false
+// });
+// const CreditShop = dynamic(() => import('@/components/CreditShop').then(mod => mod.CreditShop), { ssr: false });
 const UsageMonitor = dynamic(() => import('@/components/UsageMonitor').then(mod => mod.UsageMonitor), { ssr: false });
 const CanvasEditor = dynamic(() => import('@/components/CanvasEditor'), {
   loading: () => <div className="p-12 text-center text-gray-500">Loading Canvas Editor...</div>,
@@ -258,7 +258,7 @@ const Page: React.FC = () => {
           {isSidebarOpen ? (
             <>
               <div className="mt-6 mb-8 animate-in fade-in duration-300">
-                <CreditShop />
+                {/* <CreditShop /> */}
                 <UsageMonitor />
               </div>
               <div className="p-4 bg-white/5 rounded-2xl space-y-3 animate-in fade-in duration-300">
@@ -334,7 +334,7 @@ const Page: React.FC = () => {
             {appView === 'factory' && <FactoryOnePage />}
             {appView === 'fit-builder' && <FitBuilder />}
 
-            {appView === 'thumbnail-generator' && <ThumbnailGenerator />}
+            {/* {appView === 'thumbnail-generator' && <ThumbnailGenerator />} */}
             {appView === 'admin' && <AdminKeyManager />}
             {appView === 'canvas-editor' && <CanvasEditor />}
             {appView === 'video-studio' && <VideoStudio />}
