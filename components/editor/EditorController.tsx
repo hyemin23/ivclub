@@ -6,7 +6,6 @@ import { Plus, X, Download, Sparkles, Settings, Eye, MapPin, Scale, Image as Ima
 import { SmartPin, VsComparisonItem } from '@/types';
 import { analyzeProductCopy, analyzeProductVision } from '@/services/geminiService';
 import { DesignKeyword } from '@/types';
-import { supabase } from '@/lib/supabaseClient';
 import { toast } from 'sonner';
 
 interface EditorControllerProps {
@@ -152,46 +151,20 @@ const EditorController: React.FC<EditorControllerProps> = ({ onOpenNanoBanana })
 
         for (const file of files) {
             try {
-                // 1. Upload to Supabase Storage
-                // Use a unique path: timestamp_filename
-                // Sanitize filename to avoid issues with korean/spaces if needed, but Supabase handles utf8 well generally.
-                // Keeping it simple for now or using uuid
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-                const filePath = `${fileName}`;
-
-                const { data, error } = await supabase.storage
-                    .from('product-images')
-                    .upload(filePath, file);
-
-                if (error) {
-                    console.error('Supabase Upload Error:', error);
-                    toast.error(`이미지 업로드 실패: ${error.message}`);
-                    continue;
-                }
-
-                // 2. Get Public URL
-                const { data: { publicUrl } } = supabase.storage
-                    .from('product-images')
-                    .getPublicUrl(filePath);
-
-                if (publicUrl) {
-                    newUrls.push(publicUrl);
-                }
-
+                const url = URL.createObjectURL(file);
+                newUrls.push(url);
             } catch (err) {
-                console.error('Upload handling error:', err);
-                toast.error('이미지 업로드 중 오류가 발생했습니다.');
+                console.error('File processing error:', err);
+                toast.error('이미지 처리 중 오류가 발생했습니다.');
             }
         }
 
         if (newUrls.length > 0) {
             setUploadedImages([...uploadedImages, ...newUrls]);
-            // If no main image OR current main image is invalid (blob or base64), set to the new one
             if ((!mainImageUrl || mainImageUrl.startsWith('blob:') || mainImageUrl.startsWith('data:')) && newUrls.length > 0) {
                 setMainImageUrl(newUrls[0]);
             }
-            toast.success(`${newUrls.length}장의 이미지가 업로드되었습니다.`);
+            toast.success(`${newUrls.length}장의 이미지가 추가되었습니다.`);
         }
     };
 

@@ -212,7 +212,6 @@ export interface ProductSpecs {
 
 export interface ProductState {
   credits: number;
-  user: any | null; // Supabase User
   brandName: string;
   name: string;
   analysis: ProductAnalysis | null;

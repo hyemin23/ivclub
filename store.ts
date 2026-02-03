@@ -51,7 +51,6 @@ const getMsgId = () => Date.now().toString(36) + Math.random().toString(36).subs
 
 interface AppStore extends ProductState {
   credits: number;
-  user: any | null;
   setStep: (step: 1 | 2 | 3) => void;
   setAppView: (view: AppView) => void;
   setResolution: (res: Resolution) => void;
@@ -94,10 +93,7 @@ interface AppStore extends ProductState {
   logs: LogEntry[];
   addLog: (message: string, type?: LogEntry['type']) => void;
   clearLogs: () => void;
-  // Credit System
   addCredits: (amount: number) => void;
-  // User System
-  setUser: (user: any | null) => void;
 
   // Block Editor Actions
   pageBlocks: PageBlock[];
@@ -153,9 +149,8 @@ interface AppStore extends ProductState {
   setActiveModelId: (id: string | null) => void;
 }
 
-const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSizeData' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setUser' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks' | 'setSelectedBlockId' | 'setActiveTab' | 'setDesignKeywords' | 'setComparisons' | 'setUploadedImages' | 'setProductNameInput' | 'setMainImageUrl' | 'setSmartPins' | 'setCopyAnalysis' | 'addVideoLog' | 'updateVideoLog' | 'setActiveVideoLogId' | 'addToBackgroundHistory' | 'clearBackgroundHistory' | 'addSavedModel' | 'removeSavedModel' | 'updateSavedModel' | 'setActiveModelId'> = {
+const initialState: Omit<AppStore, 'setStep' | 'setAppView' | 'setResolution' | 'setProductInfo' | 'setAnalysis' | 'setSizeCategory' | 'addSizeRow' | 'removeSizeRow' | 'updateSizeRow' | 'setSizeTable' | 'addSizeColumn' | 'removeSizeColumn' | 'updateSizeColumn' | 'setSizeData' | 'setSections' | 'addLookbookImage' | 'updateLookbookImage' | 'removeLookbookImage' | 'moveLookbookImage' | 'reorderLookbookImages' | 'toggleBrandAsset' | 'updateBrandAsset' | 'clearLookbook' | 'removeSection' | 'moveSection' | 'reorderSections' | 'resetAll' | 'setApiKeys' | 'setActiveKeyId' | 'setAutoFittingState' | 'updateAutoFittingResult' | 'addLog' | 'clearLogs' | 'addCredits' | 'setPageBlocks' | 'addPageBlock' | 'removePageBlock' | 'updatePageBlock' | 'reorderPageBlocks' | 'setSelectedBlockId' | 'setActiveTab' | 'setDesignKeywords' | 'setComparisons' | 'setUploadedImages' | 'setProductNameInput' | 'setMainImageUrl' | 'setSmartPins' | 'setCopyAnalysis' | 'addVideoLog' | 'updateVideoLog' | 'setActiveVideoLogId' | 'addToBackgroundHistory' | 'clearBackgroundHistory' | 'addSavedModel' | 'removeSavedModel' | 'updateSavedModel' | 'setActiveModelId'> = {
   credits: 0,
-  user: null, // Supabase User
   brandName: 'NEW BRAND',
   name: '',
   analysis: null,
@@ -430,9 +425,6 @@ export const useStore = create<AppStore>()(
 
       // Credit System
       addCredits: (amount) => set((state) => ({ credits: (state.credits || 0) + amount })),
-
-      // User System
-      setUser: (user) => set({ user }),
 
       // Block Editor Actions Implementation
       setPageBlocks: (blocks) => set({ pageBlocks: blocks }),
