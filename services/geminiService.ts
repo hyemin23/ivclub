@@ -163,6 +163,22 @@ export const generateBackgroundChange = async (
   });
 };
 
+export const generateColorChangeFromReference = async (
+  sourceImage: string,
+  refImage: string,
+  prompt?: string
+): Promise<string> => {
+  return changeColorVariant(sourceImage, refImage);
+};
+
+export const generateProductReplacement = async (
+  sourceImage: string,
+  refImage: string,
+  prompt?: string
+): Promise<string> => {
+  return replaceBackground(sourceImage, refImage, prompt || "Apply the product from the reference image onto the subject in the source image.");
+};
+
 export const generateDetailImage = async (baseImage: string, prompt: string): Promise<string> => {
   return replaceBackground(baseImage, null, "Clean white studio background, high quality product photography, " + prompt);
 };

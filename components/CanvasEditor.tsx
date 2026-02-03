@@ -86,7 +86,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onClose, onCo
                 reader.readAsDataURL(images[0]);
             });
 
-            const result = await analyzeProductVision(imageBase64);
+            const result = await analyzeProductVision(imageBase64, "Fashion Product");
             onComplete(images, result);
         } catch (err: any) {
             console.error('Vision AI 분석 실패:', err);
